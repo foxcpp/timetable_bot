@@ -13,13 +13,13 @@ var tableUrl = `http://e-rozklad.dut.edu.ua/timeTable/groupExcel?type=0`
 
 func DownloadTable(from, to time.Time, course, faculty, group int) (map[time.Time][]RawEntry, error) {
 	form := url.Values{
-		"timeTable": {"0"},
-		"TimeTableForm[course]": {strconv.Itoa(course)},
-		"TimeTableForm[date1]": {from.Format("02.01.2006")},
-		"TimeTableForm[date2]": {to.Format("02.01.2006")},
-		"TimeTableForm[group]": {strconv.Itoa(group)},
+		"timeTable":              {"0"},
+		"TimeTableForm[course]":  {strconv.Itoa(course)},
+		"TimeTableForm[date1]":   {from.Format("02.01.2006")},
+		"TimeTableForm[date2]":   {to.Format("02.01.2006")},
+		"TimeTableForm[group]":   {strconv.Itoa(group)},
 		"TimeTableForm[faculty]": {strconv.Itoa(faculty)},
-		"TimeTableForm[r11]": {"5"},
+		"TimeTableForm[r11]":     {"5"},
 	}
 	resp, err := http.PostForm(tableUrl, form)
 	if err != nil {
@@ -28,6 +28,9 @@ func DownloadTable(from, to time.Time, course, faculty, group int) (map[time.Tim
 
 	if resp.StatusCode != 200 {
 		return nil, errors.New("HTTP status " + resp.Status)
+	}
+	if resp.ContentLength < 0 {
+		return nil, errors.New("no data")
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, resp.ContentLength))

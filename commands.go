@@ -25,10 +25,10 @@ func adminCheck(uid int) bool {
 	return false
 }
 
-var typeStr = map[LessonType]string {
-	Lab: "Лабараторная",
+var typeStr = map[LessonType]string{
+	Lab:      "Лабараторная",
 	Practice: "Практическое занятие",
-	Lecture: "Лекция",
+	Lecture:  "Лекция",
 }
 
 const helpText = `/help  - _Этот текст_
@@ -62,7 +62,7 @@ const adminhelpText = `*Админские команды*
 ` + "```"
 
 func reportError(e error, replyToTgt *tgbotapi.Message) {
-	if _, err := replyTo(replyToTgt, fmt.Sprintf("*Что-то сломалось*\n```\n%s\n```", e)); err != nil{
+	if _, err := replyTo(replyToTgt, fmt.Sprintf("*Что-то сломалось*\n```\n%s\n```", e)); err != nil {
 		log.Println("ERROR:", err)
 	}
 }
@@ -122,11 +122,11 @@ func setCmd(msg *tgbotapi.Message) error {
 		}
 		entries[i] = entry
 	}
-	if err := db.ReplaceDay(day, entries,false); err != nil {
+	if err := db.ReplaceDay(day, entries, false); err != nil {
 		reportError(err, msg)
 		return err
 	}
-	if _, err := replyTo(msg, "Расписание на " + day.Format("_2 January 2006") + " задано."); err != nil {
+	if _, err := replyTo(msg, "Расписание на "+day.Format("_2 January 2006")+" задано."); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
 	return nil
@@ -158,7 +158,7 @@ func clearCmd(msg *tgbotapi.Message) error {
 	if err := db.ClearDay(day); err != nil {
 		reportError(err, msg)
 	}
-	if _, err := replyTo(msg, "Расписание на " + day.Format("_2 January 2006") + " удалено."); err != nil {
+	if _, err := replyTo(msg, "Расписание на "+day.Format("_2 January 2006")+" удалено."); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
 	return nil
@@ -309,7 +309,7 @@ func timetableCmd(msg *tgbotapi.Message) error {
 		res[i] = fmt.Sprintf("%d. %s - %s, перерыв в %s.", i+1,
 			TimeSlotSet(time.Now().In(timezone), timetableBegin[i]).Format("15:04"),
 			TimeSlotSet(time.Now().In(timezone), timetableEnd[i]).Format("15:04"),
-			TimeSlotSet(time.Now().In(timezone), timetableBreak[i]).Format("15:04"),)
+			TimeSlotSet(time.Now().In(timezone), timetableBreak[i]).Format("15:04"))
 	}
 	if _, err := replyTo(msg, strings.Join(res, "\n")); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d: %v", msg.Chat.ID, msg.MessageID, err)
@@ -318,6 +318,12 @@ func timetableCmd(msg *tgbotapi.Message) error {
 }
 
 func updateCmd(msg *tgbotapi.Message) error {
+	if !adminCheck(msg.From.ID) {
+		if _, err := replyTo(msg, "У тебя нет прав это делать."); err != nil {
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		}
+	}
+
 	splitten := strings.Split(msg.Text, " ")
 	if len(splitten) != 3 {
 		if _, err := replyTo(msg, "Использование: /schedule ОТ ДО; Напр. /schedule 12.09.18 16.09.18.\nПромежуток не может включать более недели (ПАРСЕР НЕДОПИЛЕН, НЕ ТРОГАЙТЕ)."); err != nil {
@@ -377,7 +383,7 @@ func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
 		return errors.Wrap(err, "edit msg text")
 	}
 
-	if _, err := bot.AnswerCallbackQuery(tgbotapi.NewCallback(query.ID,"")); err != nil {
+	if _, err := bot.AnswerCallbackQuery(tgbotapi.NewCallback(query.ID, "")); err != nil {
 		return errors.Wrapf(err, "answerCallbackQuery %v", query.ID)
 	}
 	return nil
