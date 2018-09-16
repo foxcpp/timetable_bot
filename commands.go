@@ -170,10 +170,10 @@ func formatTimetable(date time.Time, entries []Entry) string {
 	for i, entry := range entries {
 		ttindx := ttindex(TimeSlot{entry.Time.Hour(), entry.Time.Minute()})
 
-		entryStr := fmt.Sprintf("*%d. Аудитория %s - %s*\n%d:%d - %d:%d, %s, %s",
+		entryStr := fmt.Sprintf("*%d. Аудитория %s - %s*\n%s - %s, %s, %s",
 			ttindx, entry.Classroom, entry.Name,
-			entry.Time.Hour(), entry.Time.Minute(),
-			timetableEnd[ttindx-1].Hour, timetableEnd[ttindx-1].Minute,
+			entry.Time.Format("15:04"),
+			TimeSlotSet(date, timetableEnd[ttindx-1]).Format("15:04"),
 			typeStr[entry.Type], entry.Lecturer)
 		entriesStr[i] = entryStr
 	}
@@ -181,6 +181,14 @@ func formatTimetable(date time.Time, entries []Entry) string {
 		entriesStr = append(entriesStr, "_пусто_")
 	}
 	return hdr + strings.Join(entriesStr, "\n\n")
+}
+
+func makeSchedButtons(date time.Time) tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("\u25C0",
+			date.AddDate(0, 0, -1).Format("02.01.06")),
+		tgbotapi.NewInlineKeyboardButtonData("\u25B6",
+			date.AddDate(0, 0, 1).Format("02.01.06"))})
 }
 
 func scheduleCmd(msg *tgbotapi.Message) error {
@@ -206,9 +214,15 @@ func scheduleCmd(msg *tgbotapi.Message) error {
 		return err
 	}
 
-	if _, err := replyTo(msg, formatTimetable(day, entries)); err != nil {
+	m, err := replyTo(msg, formatTimetable(day, entries))
+	if err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
+
+	if _, err := bot.Send(tgbotapi.NewEditMessageReplyMarkup(m.Chat.ID, m.MessageID, makeSchedButtons(day))); err != nil {
+		return errors.Wrapf(err, "editMessageReplyMarkup chatid=%d, msgid=%d", m.Chat.ID, m.MessageID)
+	}
+
 	return nil
 }
 
@@ -220,9 +234,15 @@ func todayCmd(msg *tgbotapi.Message) error {
 		return err
 	}
 
-	if _, err := replyTo(msg, formatTimetable(now, entries)); err != nil {
+	m, err := replyTo(msg, formatTimetable(now, entries))
+	if err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
+
+	if _, err := bot.Send(tgbotapi.NewEditMessageReplyMarkup(m.Chat.ID, m.MessageID, makeSchedButtons(now))); err != nil {
+		return errors.Wrapf(err, "editMessageReplyMarkup chatid=%d, msgid=%d", m.Chat.ID, m.MessageID)
+	}
+
 	return nil
 }
 
@@ -234,9 +254,15 @@ func tomorrowCmd(msg *tgbotapi.Message) error {
 		return err
 	}
 
-	if _, err := replyTo(msg, formatTimetable(tomorrow, entries)); err != nil {
+	m, err := replyTo(msg, formatTimetable(tomorrow, entries))
+	if err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
+
+	if _, err := bot.Send(tgbotapi.NewEditMessageReplyMarkup(m.Chat.ID, m.MessageID, makeSchedButtons(tomorrow))); err != nil {
+		return errors.Wrapf(err, "editMessageReplyMarkup chatid=%d, msgid=%d", m.Chat.ID, m.MessageID)
+	}
+
 	return nil
 }
 
@@ -265,7 +291,7 @@ func nextCmd(msg *tgbotapi.Message) error {
 	}
 
 	ttindx := ttindex(TimeSlot{entry.Time.Hour(), entry.Time.Minute()})
-	entryStr := fmt.Sprintf("*%d. Аудитория %s - %s\n%d:%d - %d:%d, %s, %s\n",
+	entryStr := fmt.Sprintf("*%d. Аудитория %s - %s*\n%d:%d - %d:%d, %s, %s\n",
 		ttindx, entry.Classroom, entry.Name,
 		entry.Time.Hour(), entry.Time.Minute(),
 		timetableEnd[ttindx-1].Hour, timetableEnd[ttindx-1].Minute,
@@ -280,13 +306,79 @@ func nextCmd(msg *tgbotapi.Message) error {
 func timetableCmd(msg *tgbotapi.Message) error {
 	res := make([]string, len(timetableBegin))
 	for i := 0; i < len(timetableBegin); i++ {
-		res[i] = fmt.Sprintf("%d. %d:%d - %d:%d, перерыв в %d:%d.", i+1,
-			timetableBegin[i].Hour, timetableBegin[i].Minute,
-			timetableEnd[i].Hour, timetableEnd[i].Minute,
-			timetableBreak[i].Hour, timetableBreak[i].Hour)
+		res[i] = fmt.Sprintf("%d. %s - %s, перерыв в %s.", i+1,
+			TimeSlotSet(time.Now().In(timezone), timetableBegin[i]).Format("15:04"),
+			TimeSlotSet(time.Now().In(timezone), timetableEnd[i]).Format("15:04"),
+			TimeSlotSet(time.Now().In(timezone), timetableBreak[i]).Format("15:04"),)
 	}
 	if _, err := replyTo(msg, strings.Join(res, "\n")); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d: %v", msg.Chat.ID, msg.MessageID, err)
+	}
+	return nil
+}
+
+func updateCmd(msg *tgbotapi.Message) error {
+	splitten := strings.Split(msg.Text, " ")
+	if len(splitten) != 3 {
+		if _, err := replyTo(msg, "Использование: /schedule ОТ ДО; Напр. /schedule 12.09.18 16.09.18.\nПромежуток не может включать более недели (ПАРСЕР НЕДОПИЛЕН, НЕ ТРОГАЙТЕ)."); err != nil {
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		}
+		return nil
+	}
+
+	from, err := time.ParseInLocation("02.01.06", splitten[1], timezone)
+	if err != nil {
+		if _, err := replyTo(msg, "Некорректный формат даты. Пример: 12.09.18."); err != nil {
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		}
+		return nil
+	}
+	to, err := time.ParseInLocation("02.01.06", splitten[2], timezone)
+	if err != nil {
+		if _, err := replyTo(msg, "Некорректный формат даты. Пример: 12.09.18."); err != nil {
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		}
+		return nil
+	}
+
+	if err := updateTimetable(from, to); err != nil {
+		reportError(err, msg)
+		return err
+	}
+	if _, err := replyTo(msg, "Done."); err != nil {
+		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+	}
+	return nil
+}
+
+func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
+	if query.Data == "" {
+		return errors.New("no data in callback query")
+	}
+	if query.Message == nil {
+		return errors.New("message too old")
+	}
+	date, err := time.ParseInLocation("02.01.06", query.Data, timezone)
+	if err != nil {
+		return errors.Wrap(err, "parse data date")
+	}
+
+	entries, err := db.OnDay(date)
+	if err != nil {
+		return errors.Wrap(err, "db query")
+	}
+
+	cfg := tgbotapi.NewEditMessageText(query.Message.Chat.ID, query.Message.MessageID, formatTimetable(date, entries))
+	newReplyMarkup := makeSchedButtons(date)
+	cfg.ParseMode = "Markdown"
+	cfg.ReplyMarkup = &newReplyMarkup
+
+	if _, err := bot.Send(cfg); err != nil {
+		return errors.Wrap(err, "edit msg text")
+	}
+
+	if _, err := bot.AnswerCallbackQuery(tgbotapi.NewCallback(query.ID,"")); err != nil {
+		return errors.Wrapf(err, "answerCallbackQuery %v", query.ID)
 	}
 	return nil
 }

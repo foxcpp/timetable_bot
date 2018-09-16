@@ -142,7 +142,11 @@ func (db *DB) ReplaceDay(day time.Time, entries []Entry, batch bool) error {
 func (db *DB) BatchFillable(day time.Time) (bool, error) {
 	row := db.batchFillable.QueryRow(day.Year(), day.Month(), day.Day())
 	res := true
-	return res, row.Scan(&res)
+	err := row.Scan(&res)
+	if err != nil && err != sql.ErrNoRows {
+		return false, err
+	}
+	return res, nil
 }
 
 func (db *DB) ClearDay(day time.Time) error {
@@ -154,7 +158,13 @@ func (db *DB) ExactGet(t time.Time) (*Entry, error) {
 	row := db.exactGet.QueryRow(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	res := Entry{}
 	res.Time = t
-	return &res, row.Scan(&res.Type, &res.Classroom, &res.Lecturer, &res.Name)
+	if err := row.Scan(&res.Type, &res.Classroom, &res.Lecturer, &res.Name); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &res, nil
 }
 
 func (db *DB) OnDay(day time.Time) ([]Entry, error) {

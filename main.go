@@ -1,9 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/jasonlvhit/gocron"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+	"hexawolf.me/git/foxcpp/timetable_bot/timetableparser"
 	"io/ioutil"
 	"log"
 	"os"
@@ -56,49 +58,10 @@ type Config struct {
 	NotifyInMins int `yaml:"notify_in_mins"`
 	NotifyOnEnd bool `yaml:"notify_on_end"`
 	NotifyOnBreak bool `yaml:"notify_on_break"`
-}
 
-func checkNotifications() {
-	now := time.Now().In(timezone)
-
-	if config.NotifyOnEnd {
-		for _, slot := range timetableEnd {
-			if slot == (TimeSlot{now.Hour(), now.Minute()}) {
-				broadcastNotify("Конец пары!")
-			}
-		}
-	}
-	if config.NotifyOnBreak {
-		for _, slot := range timetableEnd {
-			if slot == (TimeSlot{now.Hour(), now.Minute()}) {
-				broadcastNotify("Перерыв!")
-			}
-		}
-	}
-
-	entry, err := db.ExactGet(now.Add(time.Minute * 12))
-	if err != nil {
-		log.Printf("ERROR: While querying entry for %v: %v.\n", now.Add(time.Minute * 12), err)
-	}
-	if entry != nil {
-		ttindx := ttindex(TimeSlot{entry.Time.Hour(), entry.Time.Minute()})
-		entryStr := fmt.Sprintf("*%d. Аудитория %s - %s\n%d:%d - %d:%d, %s, %s\n",
-			ttindx, entry.Classroom, entry.Name,
-			entry.Time.Hour(), entry.Time.Minute(),
-			timetableEnd[ttindx-1].Hour, timetableEnd[ttindx-1].Minute,
-			typeStr[entry.Type], entry.Lecturer)
-
-		broadcastNotify(entryStr)
-	}
-}
-func broadcastNotify(notifyStr string) {
-	for _, chat := range config.NotifyChats {
-		msg := tgbotapi.NewMessage(chat, notifyStr)
-		msg.ParseMode = "Markdown"
-		if _, err := bot.Send(msg); err != nil {
-			log.Printf("ERROR: Failed to send notification to chatid=%d: %v", chat, err)
-		}
-	}
+	Course int `yaml:"course"`
+	Faculty int `yaml:"faculty"`
+	Group int `yaml:"group"`
 }
 
 func extractCommand(update *tgbotapi.Update) string {
@@ -124,20 +87,57 @@ func extractCommand(update *tgbotapi.Update) string {
 	return ""
 }
 
-func notifier() {
-	time.Sleep(time.Second * time.Duration(60 - time.Now().Unix() % 60))
-	t := time.NewTicker(time.Second * 60)
-
-	for true {
-		<-t.C
-		checkNotifications()
+func updateNextWeekTimetable() {
+	nextWeek := time.Now().In(timezone)
+	for nextWeek.Weekday() != time.Monday {
+		nextWeek = nextWeek.AddDate(0, 0, 1)
 	}
+
+	if err := updateTimetable(nextWeek, nextWeek.AddDate(0, 0, 7)); err != nil {
+		log.Println("ERROR: while updating timetable", err)
+	}
+}
+
+func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {
+	res := make([]Entry, len(e))
+	for i, ent := range e {
+		res[i] = Entry{
+			TimeSlotSet(date, timetableBegin[ent.Sequence-1]),
+			types[strings.ToLower(ent.Type)],
+			ent.Classroom,
+			ent.Lecturer,
+			ent.Name,
+		}
+	}
+	return res
+}
+
+func updateTimetable(from time.Time, to time.Time) error {
+	entriesRawFull, err := ttparser.DownloadTable(from, to, config.Course, config.Faculty, config.Group)
+	if err != nil {
+		return errors.Wrapf(err, "table download %v-%v", from, to)
+	}
+
+	for date, entriesRaw := range entriesRawFull {
+		entries := FromRaw(date, entriesRaw)
+		y, err := db.BatchFillable(date)
+		if err != nil {
+			panic(err)
+		}
+		log.Println(date, entries)
+		if y {
+			if err := db.ReplaceDay(date, entries, true); err != nil {
+				return errors.Wrapf(err, "db update %v", err)
+			}
+		}
+	}
+	return nil
 }
 
 func main() {
 	confFile, err := ioutil.ReadFile("botconf.yml")
 	if err != nil {
-		log.Fatalln("Failed to write config file (botconf.yml):", err)
+		log.Fatalln("Failed to read config file (botconf.yml):", err)
 	}
 	if err = yaml.Unmarshal(confFile, &config); err != nil {
 		log.Fatalln("Failed to decode config file (botconf.yml):", err)
@@ -153,7 +153,9 @@ func main() {
 		log.Fatalln("Failed to init Bot API:", err)
 	}
 
-	go notifier()
+	gocron.Every(1).Minute().Do(checkNotifications)
+	gocron.Every(1).Day().At("00:00").Do(updateNextWeekTimetable)
+	gocron.Start()
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 25
@@ -172,36 +174,47 @@ func main() {
 				log.Printf("%v; stopping...\n", s)
 				return
 			case update := <-updates:
-				command := extractCommand(&update)
-				if command == "" {
-					continue
-				}
+				if update.CallbackQuery != nil {
+					err = handleCallbackQuery(update.CallbackQuery)
 
-				var err error
-				switch command {
-				case "today":
-					err = todayCmd(update.Message)
-				case "tomorrow":
-					err = tomorrowCmd(update.Message)
-				case "next":
-					err = nextCmd(update.Message)
-				case "set":
-					err = setCmd(update.Message)
-				case "timetable":
-					err = timetableCmd(update.Message)
-				case "help":
-					err = helpCmd(update.Message)
-				case "adminhelp":
-					err = adminHelpCmd(update.Message)
-				case "schedule":
-					err = scheduleCmd(update.Message)
-				case "clear":
-					err = clearCmd(update.Message)
-				}
+					if err != nil {
+						log.Printf("ERROR: while processing callback query id %v: %v\n",
+							update.CallbackQuery.ID, err)
+					}
+				} else {
+					command := extractCommand(&update)
+					if command == "" {
+						continue
+					}
 
-				if err != nil {
-					log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
-						command, update.Message.Chat.ID, update.Message.MessageID, update.Message.From.ID, err)
+					var err error
+					switch command {
+					case "today":
+						err = todayCmd(update.Message)
+					case "tomorrow":
+						err = tomorrowCmd(update.Message)
+					case "next":
+						err = nextCmd(update.Message)
+					case "set":
+						err = setCmd(update.Message)
+					case "timetable":
+						err = timetableCmd(update.Message)
+					case "help":
+						err = helpCmd(update.Message)
+					case "adminhelp":
+						err = adminHelpCmd(update.Message)
+					case "schedule":
+						err = scheduleCmd(update.Message)
+					case "clear":
+						err = clearCmd(update.Message)
+					case "update":
+						err = updateCmd(update.Message)
+					}
+
+					if err != nil {
+						log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
+							command, update.Message.Chat.ID, update.Message.MessageID, update.Message.From.ID, err)
+					}
 				}
 		}
 	}
