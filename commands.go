@@ -5,6 +5,7 @@ import (
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/pkg/errors"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 )
@@ -387,4 +388,29 @@ func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
 		return errors.Wrapf(err, "answerCallbackQuery %v", query.ID)
 	}
 	return nil
+}
+
+func booksCmd(msg *tgbotapi.Message) error {
+	r1 := rand.Intn(config.GroupSize) + 1
+	if r1 == 25 {
+		if rand.Intn(4) != 1 {
+			r1 = rand.Intn(config.GroupSize) + 1
+		}
+	}
+	r2 := rand.Intn(config.GroupSize) + 1
+	if r2 == 25 {
+		if rand.Intn(4) != 1 {
+			r2 = rand.Intn(config.GroupSize) + 1
+		}
+	}
+
+	reply := fmt.Sprintf("%d и %d", r1, r2)
+	if _, err := replyTo(msg, reply); err != nil {
+		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+	}
+	return nil
+}
+
+func init() {
+	rand.Seed(time.Now().Unix())
 }

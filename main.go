@@ -22,6 +22,7 @@ var config Config
 type TimeSlot struct {
 	Hour, Minute int
 }
+
 var timetableBegin = []TimeSlot{
 	TimeSlot{8, 00},
 	TimeSlot{9, 45},
@@ -51,21 +52,22 @@ func ttindex(slot TimeSlot) int {
 }
 
 type Config struct {
-	Token string `yaml:"token"`
-	DBfile string `yaml:"dbfile"`
-	Admins []int `yaml:"admins"`
-	NotifyChats []int64 `yaml:"notify_chats"`
-	NotifyInMins int `yaml:"notify_in_mins"`
-	NotifyOnEnd bool `yaml:"notify_on_end"`
-	NotifyOnBreak bool `yaml:"notify_on_break"`
+	Token         string  `yaml:"token"`
+	DBfile        string  `yaml:"dbfile"`
+	Admins        []int   `yaml:"admins"`
+	NotifyChats   []int64 `yaml:"notify_chats"`
+	NotifyInMins  int     `yaml:"notify_in_mins"`
+	NotifyOnEnd   bool    `yaml:"notify_on_end"`
+	NotifyOnBreak bool    `yaml:"notify_on_break"`
 
-	Course int `yaml:"course"`
-	Faculty int `yaml:"faculty"`
-	Group int `yaml:"group"`
+	Course    int `yaml:"course"`
+	Faculty   int `yaml:"faculty"`
+	Group     int `yaml:"group"`
+	GroupSize int `yaml:"group_size"`
 }
 
 func extractCommand(update *tgbotapi.Update) string {
-	if update.Message == nil || !bot.IsMessageToMe(*update.Message) || update.Message.Text == "" {
+	if update.Message == nil || update.Message.Text == "" {
 		return ""
 	}
 
@@ -170,52 +172,54 @@ func main() {
 	log.Println("Started.")
 	for true {
 		select {
-			case s := <-sig:
-				log.Printf("%v; stopping...\n", s)
-				return
-			case update := <-updates:
-				if update.CallbackQuery != nil {
-					err = handleCallbackQuery(update.CallbackQuery)
+		case s := <-sig:
+			log.Printf("%v; stopping...\n", s)
+			return
+		case update := <-updates:
+			if update.CallbackQuery != nil {
+				err = handleCallbackQuery(update.CallbackQuery)
 
-					if err != nil {
-						log.Printf("ERROR: while processing callback query id %v: %v\n",
-							update.CallbackQuery.ID, err)
-					}
-				} else {
-					command := extractCommand(&update)
-					if command == "" {
-						continue
-					}
-
-					var err error
-					switch command {
-					case "today":
-						err = todayCmd(update.Message)
-					case "tomorrow":
-						err = tomorrowCmd(update.Message)
-					case "next":
-						err = nextCmd(update.Message)
-					case "set":
-						err = setCmd(update.Message)
-					case "timetable":
-						err = timetableCmd(update.Message)
-					case "help":
-						err = helpCmd(update.Message)
-					case "adminhelp":
-						err = adminHelpCmd(update.Message)
-					case "schedule":
-						err = scheduleCmd(update.Message)
-					case "clear":
-						err = clearCmd(update.Message)
-					case "update":
-						err = updateCmd(update.Message)
-					}
-
-					if err != nil {
-						log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
-							command, update.Message.Chat.ID, update.Message.MessageID, update.Message.From.ID, err)
-					}
+				if err != nil {
+					log.Printf("ERROR: while processing callback query id %v: %v\n",
+						update.CallbackQuery.ID, err)
 				}
+			} else {
+				command := extractCommand(&update)
+				if command == "" {
+					continue
+				}
+
+				var err error
+				switch command {
+				case "today":
+					err = todayCmd(update.Message)
+				case "tomorrow":
+					err = tomorrowCmd(update.Message)
+				case "next":
+					err = nextCmd(update.Message)
+				case "set":
+					err = setCmd(update.Message)
+				case "timetable":
+					err = timetableCmd(update.Message)
+				case "help":
+					err = helpCmd(update.Message)
+				case "adminhelp":
+					err = adminHelpCmd(update.Message)
+				case "schedule":
+					err = scheduleCmd(update.Message)
+				case "clear":
+					err = clearCmd(update.Message)
+				case "update":
+					err = updateCmd(update.Message)
+				case "books":
+					err = booksCmd(update.Message)
+				}
+
+				if err != nil {
+					log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
+						command, update.Message.Chat.ID, update.Message.MessageID, update.Message.From.ID, err)
+				}
+			}
 		}
 	}
 }
