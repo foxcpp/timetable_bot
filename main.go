@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/jasonlvhit/gocron"
 	"github.com/pkg/errors"
@@ -60,10 +61,11 @@ type Config struct {
 	NotifyOnEnd   bool    `yaml:"notify_on_end"`
 	NotifyOnBreak bool    `yaml:"notify_on_break"`
 
-	Course    int `yaml:"course"`
-	Faculty   int `yaml:"faculty"`
-	Group     int `yaml:"group"`
-	GroupSize int `yaml:"group_size"`
+	Course  int `yaml:"course"`
+	Faculty int `yaml:"faculty"`
+	Group   int `yaml:"group"`
+
+	GroupMembers []string `yaml:"group_members"`
 }
 
 func extractCommand(update *tgbotapi.Update) string {
@@ -98,6 +100,17 @@ func updateNextWeekTimetable() {
 	if err := updateTimetable(nextWeek, nextWeek.AddDate(0, 0, 7)); err != nil {
 		log.Println("ERROR: while updating timetable", err)
 	}
+}
+
+func formatEntry(entry Entry) string {
+	ttindx := ttindex(TimeSlot{entry.Time.Hour(), entry.Time.Minute()})
+
+	entryStr := fmt.Sprintf("*%d. Аудитория %s - %s*\n%s - %s, %s, %s",
+		ttindx, entry.Classroom, entry.Name,
+		entry.Time.Format("15:04"),
+		TimeSlotSet(time.Now(), timetableEnd[ttindx-1]).Format("15:04"),
+		typeStr[entry.Type], entry.Lecturer)
+	return entryStr
 }
 
 func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {

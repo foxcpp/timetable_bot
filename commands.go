@@ -169,14 +169,7 @@ func formatTimetable(date time.Time, entries []Entry) string {
 	hdr := "*Расписание на " + date.Format("_2 January 2006") + "*\n\n"
 	entriesStr := make([]string, len(entries))
 	for i, entry := range entries {
-		ttindx := ttindex(TimeSlot{entry.Time.Hour(), entry.Time.Minute()})
-
-		entryStr := fmt.Sprintf("*%d. Аудитория %s - %s*\n%s - %s, %s, %s",
-			ttindx, entry.Classroom, entry.Name,
-			entry.Time.Format("15:04"),
-			TimeSlotSet(date, timetableEnd[ttindx-1]).Format("15:04"),
-			typeStr[entry.Type], entry.Lecturer)
-		entriesStr[i] = entryStr
+		entriesStr[i] = formatEntry(entry)
 	}
 	if len(entriesStr) == 0 {
 		entriesStr = append(entriesStr, "_пусто_")
@@ -291,14 +284,7 @@ func nextCmd(msg *tgbotapi.Message) error {
 		return nil
 	}
 
-	ttindx := ttindex(TimeSlot{entry.Time.Hour(), entry.Time.Minute()})
-	entryStr := fmt.Sprintf("*%d. Аудитория %s - %s*\n%d:%d - %d:%d, %s, %s\n",
-		ttindx, entry.Classroom, entry.Name,
-		entry.Time.Hour(), entry.Time.Minute(),
-		timetableEnd[ttindx-1].Hour, timetableEnd[ttindx-1].Minute,
-		typeStr[entry.Type], entry.Lecturer)
-
-	if _, err := replyTo(msg, entryStr); err != nil {
+	if _, err := replyTo(msg, formatEntry(*entry)); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
 	return nil
@@ -391,20 +377,23 @@ func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
 }
 
 func booksCmd(msg *tgbotapi.Message) error {
-	r1 := rand.Intn(config.GroupSize) + 1
-	if r1 == 25 {
-		if rand.Intn(4) != 1 {
-			r1 = rand.Intn(config.GroupSize) + 1
+	var r1, r2 int
+	for r1 == r2 {
+		r1 = rand.Intn(len(config.GroupMembers))
+		if r1 == 24 {
+			if rand.Intn(4) != 1 {
+				r1 = rand.Intn(len(config.GroupMembers))
+			}
 		}
-	}
-	r2 := rand.Intn(config.GroupSize) + 1
-	if r2 == 25 {
-		if rand.Intn(4) != 1 {
-			r2 = rand.Intn(config.GroupSize) + 1
+		r2 = rand.Intn(len(config.GroupMembers))
+		if r2 == 24 {
+			if rand.Intn(4) != 1 {
+				r2 = rand.Intn(len(config.GroupMembers))
+			}
 		}
 	}
 
-	reply := fmt.Sprintf("%d и %d", r1, r2)
+	reply := fmt.Sprintf("%s и %s", config.GroupMembers[r1], config.GroupMembers[r2])
 	if _, err := replyTo(msg, reply); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
