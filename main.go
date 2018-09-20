@@ -29,18 +29,21 @@ var timetableBegin = []TimeSlot{
 	TimeSlot{9, 45},
 	TimeSlot{11, 45},
 	TimeSlot{13, 30},
+	TimeSlot{15, 15},
 }
 var timetableEnd = []TimeSlot{
 	TimeSlot{9, 35},
 	TimeSlot{11, 20},
 	TimeSlot{13, 20},
 	TimeSlot{15, 05},
+	TimeSlot{16, 05},
 }
 var timetableBreak = []TimeSlot{
 	TimeSlot{8, 45},
 	TimeSlot{10, 30},
 	TimeSlot{12, 30},
 	TimeSlot{14, 15},
+	TimeSlot{16, 00},
 }
 
 func ttindex(slot TimeSlot) int {
@@ -154,9 +157,18 @@ func main() {
 	if err != nil {
 		log.Fatalln("Failed to read config file (botconf.yml):", err)
 	}
-	if err = yaml.Unmarshal(confFile, &config); err != nil {
+	if err = yaml.UnmarshalStrict(confFile, &config); err != nil {
 		log.Fatalln("Failed to decode config file (botconf.yml):", err)
 	}
+
+	log.Println("Configuration:")
+	log.Println("- Token:", config.Token[:10]+"...")
+	log.Println("- DB file:", config.DBfile)
+	log.Println("- Admins:", config.Admins)
+	log.Println("- Notify targets:", config.NotifyChats)
+	log.Println("- Auto-update: Group -", config.Group, "  Faculty -", config.Faculty, "  Course -", config.Course)
+	log.Println("- Group members:", len(config.GroupMembers), "people")
+	log.Println("- Notify: in", config.NotifyInMins, "before begin; on end:", config.NotifyOnEnd, "; on break:", config.NotifyOnBreak)
 
 	db, err = NewDB(config.DBfile)
 	if err != nil {
