@@ -377,6 +377,12 @@ func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
 }
 
 func booksCmd(msg *tgbotapi.Message) error {
+	if len(config.GroupMembers) == 0 {
+		if _, err := replyTo(msg, "Команда выключена; в конфиге нет списка группы."); err != nil {
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		}
+	}
+
 	var r1, r2 int
 	for r1 == r2 {
 		r1 = rand.Intn(len(config.GroupMembers))
