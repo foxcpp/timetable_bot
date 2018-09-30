@@ -3,23 +3,22 @@ package ttparser
 import (
 	"github.com/extrame/xls"
 	"io"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
-var dateRegex  = regexp.MustCompile(`\d\d\.\d\d.\d\d\d\d`)
+var dateRegex = regexp.MustCompile(`\d\d\.\d\d.\d\d\d\d`)
 var timeslotRegex = regexp.MustCompile(`(\d+) пара: \d\d:\d\d-\d\d:\d\d`)
 var entryRegexp = regexp.MustCompile(`(.+)\[(Лк|Пз|Лб)\] \nауд\. (.+)\n(.+)`)
 
 type RawEntry struct {
-	Sequence int
-	Name string
-	Type string
+	Sequence  int
+	Name      string
+	Type      string
 	Classroom string
-	Lecturer string
+	Lecturer  string
 }
 
 func OpenXLS(in io.ReadSeeker) (*xls.WorkBook, error) {
@@ -49,14 +48,12 @@ func ReadEntries(book *xls.WorkBook) (map[time.Time][]RawEntry, error) {
 		}
 
 		if !curDate.IsZero() {
-			log.Println(sheet.Row(i).Col(0))
 			timeslotMatch := timeslotRegex.FindStringSubmatch(sheet.Row(i).Col(0))
 			if timeslotMatch == nil {
 				continue
 			}
 			n, _ := strconv.Atoi(timeslotMatch[1])
 
-			log.Println(sheet.Row(i).Col(1))
 			entryMatch := entryRegexp.FindStringSubmatch(sheet.Row(i).Col(1))
 			if entryMatch == nil {
 				continue
@@ -74,5 +71,3 @@ func ReadEntries(book *xls.WorkBook) (map[time.Time][]RawEntry, error) {
 	}
 	return res, nil
 }
-
-

@@ -100,7 +100,9 @@ func updateNextWeekTimetable() {
 		nextWeek = nextWeek.AddDate(0, 0, 1)
 	}
 
-	if err := updateTimetable(nextWeek, nextWeek.AddDate(0, 0, 7)); err != nil {
+	log.Println("Updating next-week timetable")
+
+	if err := updateTimetable(nextWeek, nextWeek.AddDate(0, 0, 6)); err != nil {
 		log.Println("ERROR: while updating timetable", err)
 	}
 }
