@@ -11,14 +11,20 @@ import (
 
 var tableUrl = `http://e-rozklad.dut.edu.ua/timeTable/groupExcel?type=0`
 
-func DownloadTable(from, to time.Time, course, faculty, group int) (map[time.Time][]RawEntry, error) {
+type AutoUpdateCfg struct {
+	Course  int `yaml:"course"`
+	Faculty int `yaml:"faculty"`
+	Group   int `yaml:"group"`
+}
+
+func DownloadTable(from, to time.Time, cfg AutoUpdateCfg) (map[time.Time][]RawEntry, error) {
 	form := url.Values{
 		"timeTable":              {"0"},
-		"TimeTableForm[course]":  {strconv.Itoa(course)},
+		"TimeTableForm[course]":  {strconv.Itoa(cfg.Course)},
 		"TimeTableForm[date1]":   {from.Format("02.01.2006")},
 		"TimeTableForm[date2]":   {to.Format("02.01.2006")},
-		"TimeTableForm[group]":   {strconv.Itoa(group)},
-		"TimeTableForm[faculty]": {strconv.Itoa(faculty)},
+		"TimeTableForm[group]":   {strconv.Itoa(cfg.Group)},
+		"TimeTableForm[faculty]": {strconv.Itoa(cfg.Faculty)},
 		"TimeTableForm[r11]":     {"5"},
 	}
 	resp, err := http.PostForm(tableUrl, form)

@@ -1,0 +1,69 @@
+# File with strings to use.
+lang: ru.yml
+
+# Telegram Bot API token. Get one from @BotFather.
+token: BOT_TOKEN
+
+# Where database will be stored. Note that in addition to timetable.db
+# timetable.db-wal and timetable.db-shm will be created. You you want to move
+# db somewhere else - copy them too.
+dbfile: timetable.db
+
+# UIDs of people who will be able to modify timetable.
+# using commands from /adminhelp.
+admins:
+- 483124458
+
+# Where notifications about timetable entries should be sent.
+# Can be: UID (to send in PM) or GID (to send to group) or channel ID (to send to channel, ofc).
+notify_chats:
+- -1007165849235
+
+# Delay before notification about lesson start, in minutes. Can be zero.
+notify_in_mins: 12
+
+# Enable/disable notification on lesson end.
+notify_on_end: false
+
+# Enable/disable notification on lesson break (if you have one).
+notify_on_break: false
+
+# Timezone to use for timetable.
+# https://en.wikipedia.org/wiki/List_of_tz_database_time_zones (TZ column is value you want to put here)
+timezone: Europe/Kiev
+
+# When lessons start. First entry corresponds to first lesson and etc.
+timeslots_begin:
+- 8:00
+- 9:45
+- 11:45
+- 13:30
+- 15:15
+
+# When lessons end. First entry corresponds to first lesson and etc.
+timeslots_end:
+- 9:35
+- 11:20
+- 13:20
+- 15:05
+- 16:05
+
+# Break in middle of lesson (if any). First entry corresponds to first lesson and etc.
+timeslots_break:
+- 8:45
+- 10:30
+- 12:30
+- 14:15
+- 16:00
+
+# Parameters for timetable auto-updater.
+autoupdate:
+  group: 0
+  faculty: 0
+  course: 0
+
+# List of group members. If you want to use /books command. :)
+group_members:
+- Name
+- Name
+- Name

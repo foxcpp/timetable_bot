@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-var types = map[string]LessonType {
-	"лб": Lab,
+var types = map[string]LessonType{
+	"лб":           Lab,
 	"лабараторная": Lab,
-	"пз": Practice,
+	"пз":           Practice,
 	"практическое": Practice,
-	"лк": Lecture,
-	"лекция": Lecture,
+	"лк":           Lecture,
+	"лекция":       Lecture,
 }
 
 func TimeSlotSet(t time.Time, slot TimeSlot) time.Time {
@@ -24,8 +24,8 @@ func TimeSlotSet(t time.Time, slot TimeSlot) time.Time {
 
 var (
 	ErrTooManyEntires = errors.New("too many entries")
-	ErrInvalidFormat = errors.New("invalid entry format")
-	ErrUnknownType = errors.New("unknown lesson type")
+	ErrInvalidFormat  = errors.New("invalid entry format")
+	ErrUnknownType    = errors.New("unknown lesson type")
 
 	entryRegex = regexp.MustCompile(`(\d+)\. ([^ ]+) "([^"]+)" ([^ ]+) "([^"]+)"`)
 )
@@ -41,10 +41,10 @@ func SplitEntry(in string, day time.Time) (Entry, error) {
 		return Entry{}, ErrInvalidFormat
 	}
 
-	if n > len(timetableBegin) {
+	if n > len(config.TimeslotsBegin) {
 		return Entry{}, ErrTooManyEntires
 	}
-	res.Time = TimeSlotSet(day, timetableBegin[n-1])
+	res.Time = TimeSlotSet(day, config.TimeslotsBegin[n-1])
 
 	var prs bool
 	res.Type, prs = types[strings.ToLower(submatches[4])]

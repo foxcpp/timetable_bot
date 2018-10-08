@@ -1,16 +1,17 @@
 package main
 
 import (
-	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/jasonlvhit/gocron"
 	"github.com/pkg/errors"
+	"github.com/slongfield/pyfmt"
 	"gopkg.in/yaml.v2"
 	"hexawolf.me/git/foxcpp/timetable_bot/timetableparser"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -19,35 +20,38 @@ import (
 var bot *tgbotapi.BotAPI
 var db *DB
 var config Config
+var lang LangStrings
 
 type TimeSlot struct {
 	Hour, Minute int
 }
 
-var timetableBegin = []TimeSlot{
-	TimeSlot{8, 00},
-	TimeSlot{9, 45},
-	TimeSlot{11, 45},
-	TimeSlot{13, 30},
-	TimeSlot{15, 15},
-}
-var timetableEnd = []TimeSlot{
-	TimeSlot{9, 35},
-	TimeSlot{11, 20},
-	TimeSlot{13, 20},
-	TimeSlot{15, 05},
-	TimeSlot{16, 05},
-}
-var timetableBreak = []TimeSlot{
-	TimeSlot{8, 45},
-	TimeSlot{10, 30},
-	TimeSlot{12, 30},
-	TimeSlot{14, 15},
-	TimeSlot{16, 00},
+func (ts *TimeSlot) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	str := ""
+	if err := unmarshal(&str); err != nil {
+
+	}
+	splitten := strings.Split(str, ":")
+	if len(splitten) != 2 {
+		return errors.New("invalid timeslot format")
+	}
+	hourStr := splitten[0]
+	minuteStr := splitten[1]
+	if hour, err := strconv.Atoi(hourStr); err != nil {
+		return errors.Wrap(err, "invalid hour value")
+	} else {
+		ts.Hour = hour
+	}
+	if minute, err := strconv.Atoi(minuteStr); err != nil {
+		return errors.Wrap(err, "invalid minute value")
+	} else {
+		ts.Minute = minute
+	}
+	return nil
 }
 
 func ttindex(slot TimeSlot) int {
-	for i, slotI := range timetableBegin {
+	for i, slotI := range config.TimeslotsBegin {
 		if slotI == slot {
 			return i + 1
 		}
@@ -56,6 +60,7 @@ func ttindex(slot TimeSlot) int {
 }
 
 type Config struct {
+	Lang          string  `yaml:"lang"`
 	Token         string  `yaml:"token"`
 	DBfile        string  `yaml:"dbfile"`
 	Admins        []int   `yaml:"admins"`
@@ -63,12 +68,50 @@ type Config struct {
 	NotifyInMins  int     `yaml:"notify_in_mins"`
 	NotifyOnEnd   bool    `yaml:"notify_on_end"`
 	NotifyOnBreak bool    `yaml:"notify_on_break"`
+	TimeZone      string  `yaml:"timezone"`
 
-	Course  int `yaml:"course"`
-	Faculty int `yaml:"faculty"`
-	Group   int `yaml:"group"`
+	TimeslotsBegin []TimeSlot `yaml:"timeslots_begin"`
+	TimeslotsBreak []TimeSlot `yaml:"timeslots_break"`
+	TimeslotsEnd   []TimeSlot `yaml:"timeslots_end"`
+
+	AutoUpdate ttparser.AutoUpdateCfg `yaml:"autoupdate"`
 
 	GroupMembers []string `yaml:"group_members"`
+}
+
+type LangStrings struct {
+	LessonTypes    map[LessonType]string `yaml:"lesson_types"`
+	LessonTypeStrs map[string]LessonType `yaml:"lesson_types_short"`
+	Help           string                `yaml:"help"`
+	AdminHelp      string                `yaml:"adminhelp"`
+	Usage          struct {
+		Set      string `yaml:"set"`
+		Clear    string `yaml:"clear"`
+		Schedule string `yaml:"schedule"`
+		Update   string `yaml:"update"`
+	} `yaml:"usage"`
+	Replies struct {
+		SomethingBroke       string `yaml:"something_broke"`
+		MissingPermissions   string `yaml:"missing_permissions"`
+		InvalidDate          string `yaml:"invalid_date"`
+		TimetableSet         string `yaml:"timetable_set"`
+		TimetableClear       string `yaml:"timetable_clear"`
+		TimetableHeader      string `yaml:"timetable_header"`
+		Empty                string `yaml:"empty"`
+		BooksCommandDisabled string `yaml:"books_command_disabled"`
+		BooksCommand         string `yaml:"books_command"`
+		NoMoreLessonsToday   string `yaml:"no_more_lessons_today"`
+	} `yaml:"replies"`
+	ParseErrors struct {
+		UnexpectedError        string `yaml:"unexpected_error"`
+		InvalidTimetableFormat string `yaml:"invalid_timetable_format"`
+		TooManyLessons         string `yaml:"too_many_lessons"`
+		InvalidLessonType      string `yaml:"invalid_lesson_type"`
+	} `yaml:"parse_errors"`
+	EntryTemplate   string `yaml:"entry_template"`
+	LessonEndNotify string `yaml:"lesson_end_notify"`
+	BreakNotify     string `yaml:"break_notify"`
+	TimeslotFormat  string `yaml:"timeslot_format"`
 }
 
 func extractCommand(update *tgbotapi.Update) string {
@@ -110,19 +153,22 @@ func updateNextWeekTimetable() {
 func formatEntry(entry Entry) string {
 	ttindx := ttindex(TimeSlot{entry.Time.Hour(), entry.Time.Minute()})
 
-	entryStr := fmt.Sprintf("*%d. Аудитория %s - %s*\n%s - %s, %s, %s",
-		ttindx, entry.Classroom, entry.Name,
-		entry.Time.Format("15:04"),
-		TimeSlotSet(time.Now(), timetableEnd[ttindx-1]).Format("15:04"),
-		typeStr[entry.Type], entry.Lecturer)
-	return entryStr
+	return pyfmt.Must(lang.EntryTemplate, map[string]interface{}{
+		"num":       ttindx,
+		"classroom": entry.Classroom,
+		"name":      entry.Name,
+		"startTime": entry.Time.Format("15:04"),
+		"endTime":   TimeSlotSet(time.Now(), config.TimeslotsEnd[ttindx-1]).Format("15:04"),
+		"type":      lang.LessonTypes[entry.Type],
+		"lecturer":  entry.Lecturer,
+	})
 }
 
 func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {
 	res := make([]Entry, len(e))
 	for i, ent := range e {
 		res[i] = Entry{
-			TimeSlotSet(date, timetableBegin[ent.Sequence-1]),
+			TimeSlotSet(date, config.TimeslotsBegin[ent.Sequence-1]),
 			types[strings.ToLower(ent.Type)],
 			ent.Classroom,
 			ent.Lecturer,
@@ -133,7 +179,7 @@ func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {
 }
 
 func updateTimetable(from time.Time, to time.Time) error {
-	entriesRawFull, err := ttparser.DownloadTable(from, to, config.Course, config.Faculty, config.Group)
+	entriesRawFull, err := ttparser.DownloadTable(from, to, config.AutoUpdate)
 	if err != nil {
 		return errors.Wrapf(err, "table download %v-%v", from, to)
 	}
@@ -163,12 +209,21 @@ func main() {
 		log.Fatalln("Failed to decode config file (botconf.yml):", err)
 	}
 
+	langFile, err := ioutil.ReadFile(config.Lang)
+	if err != nil {
+		log.Fatalln("Failed read lang file:", err)
+	}
+	if err = yaml.UnmarshalStrict(langFile, &lang); err != nil {
+		log.Fatalln("Failed to decode lang file:", err)
+	}
+
 	log.Println("Configuration:")
+	log.Println("- Lang file:", config.Lang)
 	log.Println("- Token:", config.Token[:10]+"...")
 	log.Println("- DB file:", config.DBfile)
 	log.Println("- Admins:", config.Admins)
 	log.Println("- Notify targets:", config.NotifyChats)
-	log.Println("- Auto-update: Group -", config.Group, "  Faculty -", config.Faculty, "  Course -", config.Course)
+	log.Printf("- Auto-update: %+v\n", config.AutoUpdate)
 	log.Println("- Group members:", len(config.GroupMembers), "people")
 	log.Println("- Notify: in", config.NotifyInMins, "before begin; on end:", config.NotifyOnEnd, "; on break:", config.NotifyOnBreak)
 

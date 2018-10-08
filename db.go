@@ -8,34 +8,35 @@ import (
 import _ "github.com/mattn/go-sqlite3"
 
 type LessonType int
+
 const (
-	Lab LessonType = iota
-	Practice
-	Lecture
+	Lab      LessonType = 0
+	Practice            = 1
+	Lecture             = 2
 )
 
 type Entry struct {
-	Time time.Time
-	Type LessonType
+	Time      time.Time
+	Type      LessonType
 	Classroom string
-	Lecturer string
-	Name string
+	Lecturer  string
+	Name      string
 }
 
 type DB struct {
 	d *sql.DB
 
-	addEntry *sql.Stmt
-	clearDay *sql.Stmt
+	addEntry      *sql.Stmt
+	clearDay      *sql.Stmt
 	batchFillable *sql.Stmt
-	onDay *sql.Stmt
-	exactGet *sql.Stmt
+	onDay         *sql.Stmt
+	exactGet      *sql.Stmt
 }
 
 func NewDB(path string) (*DB, error) {
 	db := new(DB)
 	var err error
-	db.d, err = sql.Open("sqlite3", path + "?_journal=WAL&cache=shared")
+	db.d, err = sql.Open("sqlite3", path+"?_journal=WAL&cache=shared")
 	if err != nil {
 		return nil, errors.Wrap(err, "open")
 	}

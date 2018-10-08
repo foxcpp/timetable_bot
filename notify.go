@@ -10,16 +10,16 @@ func checkNotifications() {
 	now := time.Now().In(timezone)
 
 	if config.NotifyOnEnd {
-		for _, slot := range timetableEnd {
+		for _, slot := range config.TimeslotsEnd {
 			if slot == (TimeSlot{now.Hour(), now.Minute()}) {
-				broadcastNotify("Конец пары!")
+				broadcastNotify(lang.LessonEndNotify)
 			}
 		}
 	}
 	if config.NotifyOnBreak {
-		for _, slot := range timetableEnd {
+		for _, slot := range config.TimeslotsEnd {
 			if slot == (TimeSlot{now.Hour(), now.Minute()}) {
-				broadcastNotify("Перерыв!")
+				broadcastNotify(lang.BreakNotify)
 			}
 		}
 	}
@@ -30,8 +30,8 @@ func checkNotifications() {
 		return
 	}
 	if len(entries) != 0 &&
-		now.Add(time.Minute * 25).Hour() == entries[0].Time.Hour() &&
-		now.Add(time.Minute * 25).Minute() == entries[0].Time.Minute() {
+		now.Add(time.Minute*25).Hour() == entries[0].Time.Hour() &&
+		now.Add(time.Minute*25).Minute() == entries[0].Time.Minute() {
 
 		broadcastNotify(formatEntry(entries[0]))
 	}

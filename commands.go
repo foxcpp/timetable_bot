@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/pkg/errors"
+	"github.com/slongfield/pyfmt"
 	"log"
 	"math/rand"
 	"strings"
@@ -26,42 +27,6 @@ func adminCheck(uid int) bool {
 	return false
 }
 
-var typeStr = map[LessonType]string{
-	Lab:      "Лабараторная",
-	Practice: "Практическое занятие",
-	Lecture:  "Лекция",
-}
-
-const helpText = `/help  - _Этот текст_
-/adminhelp  -  _Справка по админским командам_
-
-*Команды для студентов*
-/today  -  _Расписание на сегодня_
-/tomorrow  -  _Расписание на завтра_
-/schedule ДАТА  -  _Расписание на указанный день_
-/next  -  _Показать информацию о следующуей паре_
-
-Даты указываюстся в формате ` + "`ДЕНЬ.ЧИСЛОМЕСЯЦА.ГОД`"
-
-const adminhelpText = `*Админские команды*
-/set ДАТА РАСПИСАНИЕ -  _Задать расписание на определенную дату (см. ниже)_
-/clear ДАТА -  _Удалить расписание на указаный день_
-
-Даты указываюстся в формате ` + "`ДЕНЬ.ЧИСЛОМЕСЯЦА.ГОД`" + `.
-
-Пункты расписания задаются в следующем формате:
-` + "```" + `
-ПОРЯДКОВЫЙ_НОМЕР. АУДИТОРИЯ "Название" ТИП "Предподаватель"
-` + "```" + `
-Кавычки *обязательны*. ТИП - лб/пз/лк или лабараторная/практическое/лекция.
-Пример:
-` + "```" + `
-/set 12 12 18
-1. 507 "Іноземна мова" пз "Миколайчук А.І. "
-1. 326 "Програмування C+" лб "Золотухіна О.А. "
-
-` + "```"
-
 func reportError(e error, replyToTgt *tgbotapi.Message) {
 	if _, err := replyTo(replyToTgt, fmt.Sprintf("*Что-то сломалось*\n```\n%s\n```", e)); err != nil {
 		log.Println("ERROR:", err)
@@ -69,18 +34,18 @@ func reportError(e error, replyToTgt *tgbotapi.Message) {
 }
 
 func helpCmd(msg *tgbotapi.Message) error {
-	_, err := replyTo(msg, helpText)
+	_, err := replyTo(msg, lang.Help)
 	return err
 }
 
 func adminHelpCmd(msg *tgbotapi.Message) error {
-	_, err := replyTo(msg, adminhelpText)
+	_, err := replyTo(msg, lang.AdminHelp)
 	return err
 }
 
 func setCmd(msg *tgbotapi.Message) error {
 	if !adminCheck(msg.From.ID) {
-		if _, err := replyTo(msg, "У тебя нет прав это делать."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.MissingPermissions); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 	}
@@ -89,7 +54,7 @@ func setCmd(msg *tgbotapi.Message) error {
 
 	splittenFirst := strings.Split(lines[0], " ")
 	if len(splittenFirst) != 2 {
-		if _, err := replyTo(msg, "Использование: /set ДАТА РАСПИСАНИЕ. Напр. /set 12.09.19 ...."); err != nil {
+		if _, err := replyTo(msg, lang.Usage.Set); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -97,7 +62,7 @@ func setCmd(msg *tgbotapi.Message) error {
 
 	day, err := time.ParseInLocation("02.01.06", splittenFirst[1], timezone)
 	if err != nil {
-		if _, err := replyTo(msg, "Некорректный формат даты. Пример: 12.09.18."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.InvalidDate); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -107,14 +72,14 @@ func setCmd(msg *tgbotapi.Message) error {
 	for i, line := range lines[1:] {
 		entry, err := SplitEntry(line, day)
 		if err != nil {
-			errMsg := "Неожиданная ошибка: " + err.Error()
+			errMsg := pyfmt.Must(lang.ParseErrors.UnexpectedError, err)
 			switch err {
 			case ErrInvalidFormat:
-				errMsg = "Некорректный формат расписания. См. /adminhelp."
+				errMsg = lang.ParseErrors.InvalidTimetableFormat
 			case ErrTooManyEntires:
-				errMsg = "Нельзя добавить больше 4 пар."
+				errMsg = lang.ParseErrors.TooManyLessons
 			case ErrUnknownType:
-				errMsg = "Некорректный тип пары."
+				errMsg = lang.ParseErrors.InvalidLessonType
 			}
 			if _, err := replyTo(msg, errMsg); err != nil {
 				return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
@@ -127,7 +92,7 @@ func setCmd(msg *tgbotapi.Message) error {
 		reportError(err, msg)
 		return err
 	}
-	if _, err := replyTo(msg, "Расписание на "+day.Format("_2 January 2006")+" задано."); err != nil {
+	if _, err := replyTo(msg, pyfmt.Must(lang.Replies.TimetableSet, day.Format("_2 January 2006"))); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
 	return nil
@@ -135,14 +100,14 @@ func setCmd(msg *tgbotapi.Message) error {
 
 func clearCmd(msg *tgbotapi.Message) error {
 	if !adminCheck(msg.From.ID) {
-		if _, err := replyTo(msg, "У тебя нет прав это делать."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.MissingPermissions); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 	}
 
 	splitten := strings.Split(msg.Text, " ")
 	if len(splitten) != 2 {
-		if _, err := replyTo(msg, "Использование: /clear ДАТА. Напр. /clear 12.09.19."); err != nil {
+		if _, err := replyTo(msg, lang.Usage.Clear); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -150,7 +115,7 @@ func clearCmd(msg *tgbotapi.Message) error {
 
 	day, err := time.ParseInLocation("02.01.06", splitten[1], timezone)
 	if err != nil {
-		if _, err := replyTo(msg, "Некорректный формат даты. Пример: 12.09.18."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.InvalidDate); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -159,20 +124,22 @@ func clearCmd(msg *tgbotapi.Message) error {
 	if err := db.ClearDay(day); err != nil {
 		reportError(err, msg)
 	}
-	if _, err := replyTo(msg, "Расписание на "+day.Format("_2 January 2006")+" удалено."); err != nil {
+	if _, err := replyTo(msg, pyfmt.Must(lang.Replies.TimetableClear, day.Format("_2 January 2006"))); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
 	return nil
 }
 
 func formatTimetable(date time.Time, entries []Entry) string {
-	hdr := "*Расписание на " + date.Format("_2 January 2006") + "*\n\n"
+	hdr := pyfmt.Must(lang.Replies.TimetableHeader, map[string]interface{}{
+		"date": date.Format("_2 January  2006"),
+	})
 	entriesStr := make([]string, len(entries))
 	for i, entry := range entries {
 		entriesStr[i] = formatEntry(entry)
 	}
 	if len(entriesStr) == 0 {
-		entriesStr = append(entriesStr, "_пусто_")
+		entriesStr = append(entriesStr, lang.Replies.Empty)
 	}
 	return hdr + strings.Join(entriesStr, "\n\n")
 }
@@ -188,7 +155,7 @@ func makeSchedButtons(date time.Time) tgbotapi.InlineKeyboardMarkup {
 func scheduleCmd(msg *tgbotapi.Message) error {
 	splitten := strings.Split(msg.Text, " ")
 	if len(splitten) != 2 {
-		if _, err := replyTo(msg, "Использование: /schedule ДАТА; Напр. /schedule 12.09.18."); err != nil {
+		if _, err := replyTo(msg, lang.Usage.Schedule); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -196,7 +163,7 @@ func scheduleCmd(msg *tgbotapi.Message) error {
 
 	day, err := time.ParseInLocation("02.01.06", splitten[1], timezone)
 	if err != nil {
-		if _, err := replyTo(msg, "Некорректный формат даты. Пример: 12.09.18."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.InvalidDate); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -264,7 +231,7 @@ func nextCmd(msg *tgbotapi.Message) error {
 	now := time.Now().In(timezone)
 
 	var entry *Entry
-	for _, slot := range timetableBegin {
+	for _, slot := range config.TimeslotsBegin {
 		if TimeSlotSet(now, slot).After(now) {
 			var err error
 			entry, err = db.ExactGet(TimeSlotSet(now, slot))
@@ -278,7 +245,7 @@ func nextCmd(msg *tgbotapi.Message) error {
 		}
 	}
 	if entry == nil {
-		if _, err := replyTo(msg, "Сегодня больше нет пар."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.NoMoreLessonsToday); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -291,12 +258,14 @@ func nextCmd(msg *tgbotapi.Message) error {
 }
 
 func timetableCmd(msg *tgbotapi.Message) error {
-	res := make([]string, len(timetableBegin))
-	for i := 0; i < len(timetableBegin); i++ {
-		res[i] = fmt.Sprintf("%d. %s - %s, перерыв в %s.", i+1,
-			TimeSlotSet(time.Now().In(timezone), timetableBegin[i]).Format("15:04"),
-			TimeSlotSet(time.Now().In(timezone), timetableEnd[i]).Format("15:04"),
-			TimeSlotSet(time.Now().In(timezone), timetableBreak[i]).Format("15:04"))
+	res := make([]string, len(config.TimeslotsBegin))
+	for i := 0; i < len(config.TimeslotsBegin); i++ {
+		res[i] = pyfmt.Must(lang.TimeslotFormat, map[string]interface{}{
+			"num":   i + 1,
+			"start": TimeSlotSet(time.Now().In(timezone), config.TimeslotsBegin[i]).Format("15:04"),
+			"end":   TimeSlotSet(time.Now().In(timezone), config.TimeslotsEnd[i]).Format("15:04"),
+			"break": TimeSlotSet(time.Now().In(timezone), config.TimeslotsBreak[i]).Format("15:04"),
+		})
 	}
 	if _, err := replyTo(msg, strings.Join(res, "\n")); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d: %v", msg.Chat.ID, msg.MessageID, err)
@@ -306,14 +275,14 @@ func timetableCmd(msg *tgbotapi.Message) error {
 
 func updateCmd(msg *tgbotapi.Message) error {
 	if !adminCheck(msg.From.ID) {
-		if _, err := replyTo(msg, "У тебя нет прав это делать."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.MissingPermissions); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 	}
 
 	splitten := strings.Split(msg.Text, " ")
 	if len(splitten) != 3 {
-		if _, err := replyTo(msg, "Использование: /schedule ОТ ДО; Напр. /schedule 12.09.18 16.09.18.\nПромежуток не может включать более недели (ПАРСЕР НЕДОПИЛЕН, НЕ ТРОГАЙТЕ)."); err != nil {
+		if _, err := replyTo(msg, lang.Usage.Update); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -321,14 +290,14 @@ func updateCmd(msg *tgbotapi.Message) error {
 
 	from, err := time.ParseInLocation("02.01.06", splitten[1], timezone)
 	if err != nil {
-		if _, err := replyTo(msg, "Некорректный формат даты. Пример: 12.09.18."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.InvalidDate); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
 	}
 	to, err := time.ParseInLocation("02.01.06", splitten[2], timezone)
 	if err != nil {
-		if _, err := replyTo(msg, "Некорректный формат даты. Пример: 12.09.18."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.InvalidDate); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 		return nil
@@ -378,7 +347,7 @@ func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
 
 func booksCmd(msg *tgbotapi.Message) error {
 	if len(config.GroupMembers) == 0 {
-		if _, err := replyTo(msg, "Команда выключена; в конфиге нет списка группы."); err != nil {
+		if _, err := replyTo(msg, lang.Replies.BooksCommandDisabled); err != nil {
 			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 		}
 	}

@@ -7,6 +7,7 @@ require (
 	github.com/jasonlvhit/gocron v0.0.0-20180312192515-54194c9749d4
 	github.com/mattn/go-sqlite3 v1.9.0
 	github.com/pkg/errors v0.8.0
+	github.com/slongfield/pyfmt v0.0.0-20180124071345-020a7cb18bca
 	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	gopkg.in/yaml.v2 v2.2.1
 )

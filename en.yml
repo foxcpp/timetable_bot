@@ -1,0 +1,67 @@
+lesson_types:
+  0: Lab
+  1: Practice
+  2: Lecture
+lesson_types_short:
+  lab: 0
+  practice: 1
+  lecture: 2
+help: |
+  /help - _This text_
+  /admin - _Help on admin commands_
+
+  *Commands for students*
+  /today - _Today's timetable_
+  /tomorrow - _Tomorrow's timetable_
+  /schedule DATE - _Timetable for specified date_
+  /next - _Next lesson info_
+
+  Date is specified in format `DAY.MONTHNUMBER.YEAR`.
+adminhelp: |
+  *Admin commands*
+  /set DATE SCHEDULE - _Override timetable on specified date (see below for format)_
+  /clear DATE - _Remove schedule for specified date_
+
+  Timetable entry format:
+  ```
+  SEQUENCE_NUMBER. CLASSROOM "Class Name" TYPE "Lecturer"
+  ```
+  Quotes are required.
+
+  Example:
+  ```
+  /set 12 12 18
+  1. 507 "Іноземна мова" пз "Миколайчук А.І. "
+  1. 326 "Програмування C+" лб "Золотухіна О.А. "
+  ```
+usage:
+  set: 'Usage: /set DATE TIMETABLE. See /adminhelp for details.'
+  clear: 'Usage: /clear DATE. See /adminhelp for details.'
+  schedule: 'Usage: /schedule DATE. See /adminhelp for details.'
+  update: 'Usage: /update FROM_DATE TO_DATE'
+replies:
+  something_broke: |-
+    *Oops! Error happened*
+    ```
+    {}
+    ```
+  missing_permissions: 'Admin access required.'
+  invalid_date: 'Invalid date format'
+  timetable_set: 'Timetable for {date} set.'
+  timetable_clear: 'Timetable for {date} cleared.'
+  timetable_header: "*Timetable for {date}*\n\n"
+  empty: _empty_
+  books_command_disabled: 'Command disabled; no group members list set.'
+  books_command: '{} and {}'
+  no_more_lessons_today: 'No more lessions today.'
+parse_errors:
+  unexpected_error: 'Unexpected error: {}'
+  invalid_timetable_format: 'Invalid timetable format. See /adminhelp.'
+  too_many_lessons: 'Too many lessons.'
+  invalid_lesson_type: 'Unknown lesson type.'
+entry_template: |-
+  *{num}. Classroom {classroom} - {name}*
+  {startTime} - {endTime}, {type}, {lecturer}
+timeslot_format: "{num}. {start} - {end}, break - {break}."
+lesson_end_notify: 'Lesson end!'
+break_notify: 'Break!'
