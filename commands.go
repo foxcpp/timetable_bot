@@ -92,7 +92,9 @@ func setCmd(msg *tgbotapi.Message) error {
 		reportError(err, msg)
 		return err
 	}
-	if _, err := replyTo(msg, pyfmt.Must(lang.Replies.TimetableSet, day.Format("_2 January 2006"))); err != nil {
+	if _, err := replyTo(msg, pyfmt.Must(lang.Replies.TimetableSet, map[string]interface{}{
+		"date": day.Format("_2 January 2006"),
+	})); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
 	return nil
@@ -124,7 +126,9 @@ func clearCmd(msg *tgbotapi.Message) error {
 	if err := db.ClearDay(day); err != nil {
 		reportError(err, msg)
 	}
-	if _, err := replyTo(msg, pyfmt.Must(lang.Replies.TimetableClear, day.Format("_2 January 2006"))); err != nil {
+	if _, err := replyTo(msg, pyfmt.Must(lang.Replies.TimetableClear, map[string]interface{}{
+		"date": day.Format("_2 January 2006"),
+	})); err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
 	return nil
