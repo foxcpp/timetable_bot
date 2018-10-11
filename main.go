@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -115,7 +116,7 @@ type LangStrings struct {
 }
 
 func extractCommand(update *tgbotapi.Update) string {
-	if update.Message == nil || update.Message.Text == "" {
+	if update == nil || update.Message == nil || update.Message.Text == "" {
 		return ""
 	}
 
@@ -190,7 +191,6 @@ func updateTimetable(from time.Time, to time.Time) error {
 		if err != nil {
 			panic(err)
 		}
-		log.Println(date, entries)
 		if y {
 			if err := db.ReplaceDay(date, entries, true); err != nil {
 				return errors.Wrapf(err, "db update %v", err)
@@ -201,7 +201,18 @@ func updateTimetable(from time.Time, to time.Time) error {
 }
 
 func main() {
-	confFile, err := ioutil.ReadFile("botconf.yml")
+	if os.Getenv("USING_SYSTEMD") == "1" {
+		// Don't log timestamp since journald records it anyway.
+		log.SetFlags(0)
+	}
+
+	if len(os.Args) != 3 {
+		log.Fatalln("Usage:", os.Args[0], "<config file> <db file>")
+	}
+	configPath := os.Args[1]
+	DBFile := os.Args[2]
+
+	confFile, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		log.Fatalln("Failed to read config file (botconf.yml):", err)
 	}
@@ -220,14 +231,14 @@ func main() {
 	log.Println("Configuration:")
 	log.Println("- Lang file:", config.Lang)
 	log.Println("- Token:", config.Token[:10]+"...")
-	log.Println("- DB file:", config.DBfile)
+	log.Println("- DB file:", DBFile)
 	log.Println("- Admins:", config.Admins)
 	log.Println("- Notify targets:", config.NotifyChats)
 	log.Printf("- Auto-update: %+v\n", config.AutoUpdate)
 	log.Println("- Group members:", len(config.GroupMembers), "people")
 	log.Println("- Notify: in", config.NotifyInMins, "before begin; on end:", config.NotifyOnEnd, "; on break:", config.NotifyOnBreak)
 
-	db, err = NewDB(config.DBfile)
+	db, err = NewDB(DBFile)
 	if err != nil {
 		log.Fatalln("Failed to open DB:", err)
 	}
@@ -252,6 +263,16 @@ func main() {
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGHUP, os.Interrupt)
 
 	log.Println("Started.")
+
+	if os.Getenv("USING_SYSTEMD") == "1" {
+		cmd := exec.Command("systemd-notify", "--ready", `--status=Listening for updates`)
+		if out, err := cmd.Output(); err != nil {
+			log.Println("Failed to notify systemd about successful startup:", err)
+			log.Println(string(out))
+		}
+	}
+
+
 	for true {
 		select {
 		case s := <-sig:

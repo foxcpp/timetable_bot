@@ -1,0 +1,15 @@
+[Unit]
+Description=Timetable Telegram bot
+After=network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=all
+ExecStart=/usr/bin/timetable-bot /etc/timetable-bot.yml /var/lib/timetable-bot/table.db
+Restart=on-failure
+StateDirectory=timetable-bot
+DynamicUser=yes
+Environment="USING_SYSTEMD=1"
+
+[Install]
+WantedBy=multi-user.target
