@@ -1,4 +1,4 @@
-module hexawolf.me/git/foxcpp/timetable_bot
+module github.com/foxcpp/timetable_bot
 
 require (
 	github.com/extrame/ole2 v0.0.0-20160812065207-d69429661ad7 // indirect

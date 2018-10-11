@@ -1,12 +1,6 @@
 package main
 
 import (
-	"github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/jasonlvhit/gocron"
-	"github.com/pkg/errors"
-	"github.com/slongfield/pyfmt"
-	"gopkg.in/yaml.v2"
-	"hexawolf.me/git/foxcpp/timetable_bot/timetableparser"
 	"io/ioutil"
 	"log"
 	"os"
@@ -16,6 +10,13 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/foxcpp/timetable_bot/timetableparser"
+	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/jasonlvhit/gocron"
+	"github.com/pkg/errors"
+	"github.com/slongfield/pyfmt"
+	"gopkg.in/yaml.v2"
 )
 
 var bot *tgbotapi.BotAPI
