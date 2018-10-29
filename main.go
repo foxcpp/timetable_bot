@@ -120,6 +120,9 @@ func extractCommand(update *tgbotapi.Update) string {
 	if update == nil || update.Message == nil || update.Message.Text == "" {
 		return ""
 	}
+	if update.Message.Entities == nil {
+		return ""
+	}
 
 	for _, entity := range *update.Message.Entities {
 		if entity.Type != "bot_command" {
@@ -272,7 +275,6 @@ func main() {
 			log.Println(string(out))
 		}
 	}
-
 
 	for true {
 		select {
