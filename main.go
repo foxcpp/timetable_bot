@@ -232,9 +232,15 @@ func main() {
 		log.Fatalln("Failed to decode lang file:", err)
 	}
 
+	timezone, err = time.LoadLocation(config.TimeZone)
+	if err != nil {
+		log.Fatalln("Failed to set timezone:", err)
+	}
+
 	log.Println("Configuration:")
 	log.Println("- Lang file:", config.Lang)
 	log.Println("- Token:", config.Token[:10]+"...")
+	log.Println("- Timezone:", timezone)
 	log.Println("- DB file:", DBFile)
 	log.Println("- Admins:", config.Admins)
 	log.Println("- Notify targets:", config.NotifyChats)
