@@ -62,23 +62,25 @@ func ttindex(slot TimeSlot) int {
 }
 
 type Config struct {
-	Lang          string  `yaml:"lang"`
-	Token         string  `yaml:"token"`
-	DBfile        string  `yaml:"dbfile"`
-	Admins        []int   `yaml:"admins"`
+	Lang              string `yaml:"lang"`
+	Token             string `yaml:"token"`
+	DBfile            string `yaml:"dbfile"`
+	CmdProcGoroutines int    `yaml:"cmd_processing_goroutines"`
+
+	Admins []int `yaml:"admins"`
+
 	NotifyChats   []int64 `yaml:"notify_chats"`
 	NotifyInMins  int     `yaml:"notify_in_mins"`
 	NotifyOnEnd   bool    `yaml:"notify_on_end"`
 	NotifyOnBreak bool    `yaml:"notify_on_break"`
-	TimeZone      string  `yaml:"timezone"`
 
+	TimeZone       string     `yaml:"timezone"`
 	TimeslotsBegin []TimeSlot `yaml:"timeslots_begin"`
 	TimeslotsBreak []TimeSlot `yaml:"timeslots_break"`
 	TimeslotsEnd   []TimeSlot `yaml:"timeslots_end"`
 
-	AutoUpdate ttparser.AutoUpdateCfg `yaml:"autoupdate"`
-
-	GroupMembers []string `yaml:"group_members"`
+	AutoUpdate   ttparser.AutoUpdateCfg `yaml:"autoupdate"`
+	GroupMembers []string               `yaml:"group_members"`
 }
 
 type LangStrings struct {
@@ -204,6 +206,56 @@ func updateTimetable(from time.Time, to time.Time) error {
 	return nil
 }
 
+func processUpdates(updates <-chan tgbotapi.Update) {
+	for {
+		update := <-updates
+		if update.CallbackQuery != nil {
+			err := handleCallbackQuery(update.CallbackQuery)
+
+			if err != nil {
+				log.Printf("ERROR: while processing callback query id %v: %v\n",
+					update.CallbackQuery.ID, err)
+			}
+		} else {
+			command := extractCommand(&update)
+			if command == "" {
+				continue
+			}
+
+			var err error
+			switch command {
+			case "today":
+				err = todayCmd(update.Message)
+			case "tomorrow":
+				err = tomorrowCmd(update.Message)
+			case "next":
+				err = nextCmd(update.Message)
+			case "set":
+				err = setCmd(update.Message)
+			case "timetable":
+				err = timetableCmd(update.Message)
+			case "help":
+				err = helpCmd(update.Message)
+			case "adminhelp":
+				err = adminHelpCmd(update.Message)
+			case "schedule":
+				err = scheduleCmd(update.Message)
+			case "clear":
+				err = clearCmd(update.Message)
+			case "update":
+				err = updateCmd(update.Message)
+			case "books":
+				err = booksCmd(update.Message)
+			}
+
+			if err != nil {
+				log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
+					command, update.Message.Chat.ID, update.Message.MessageID, update.Message.From.ID, err)
+			}
+		}
+	}
+}
+
 func main() {
 	if os.Getenv("USING_SYSTEMD") == "1" {
 		// Don't log timestamp since journald records it anyway.
@@ -282,56 +334,10 @@ func main() {
 		}
 	}
 
-	for true {
-		select {
-		case s := <-sig:
-			log.Printf("%v; stopping...\n", s)
-			return
-		case update := <-updates:
-			if update.CallbackQuery != nil {
-				err = handleCallbackQuery(update.CallbackQuery)
-
-				if err != nil {
-					log.Printf("ERROR: while processing callback query id %v: %v\n",
-						update.CallbackQuery.ID, err)
-				}
-			} else {
-				command := extractCommand(&update)
-				if command == "" {
-					continue
-				}
-
-				var err error
-				switch command {
-				case "today":
-					err = todayCmd(update.Message)
-				case "tomorrow":
-					err = tomorrowCmd(update.Message)
-				case "next":
-					err = nextCmd(update.Message)
-				case "set":
-					err = setCmd(update.Message)
-				case "timetable":
-					err = timetableCmd(update.Message)
-				case "help":
-					err = helpCmd(update.Message)
-				case "adminhelp":
-					err = adminHelpCmd(update.Message)
-				case "schedule":
-					err = scheduleCmd(update.Message)
-				case "clear":
-					err = clearCmd(update.Message)
-				case "update":
-					err = updateCmd(update.Message)
-				case "books":
-					err = booksCmd(update.Message)
-				}
-
-				if err != nil {
-					log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
-						command, update.Message.Chat.ID, update.Message.MessageID, update.Message.From.ID, err)
-				}
-			}
-		}
+	for i := 0; i < config.CmdProcGoroutines; i++ {
+		go processUpdates(updates)
 	}
+
+	s := <-sig
+	log.Printf("%v; stopping...\n", s)
 }
