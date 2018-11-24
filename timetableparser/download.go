@@ -3,6 +3,7 @@ package ttparser
 import (
 	"bytes"
 	"github.com/pkg/errors"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,20 +32,16 @@ func DownloadTable(from, to time.Time, cfg AutoUpdateCfg) (map[time.Time][]RawEn
 	if err != nil {
 		return nil, errors.Wrap(err, "table get")
 	}
-
 	if resp.StatusCode != 200 {
 		return nil, errors.New("HTTP status " + resp.Status)
 	}
-	if resp.ContentLength < 0 {
-		return nil, errors.New("no data")
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "body read")
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, resp.ContentLength))
-	if _, err := buf.ReadFrom(resp.Body); err != nil {
-		return nil, errors.Wrap(err, "table read")
-	}
-
-	xls, err := OpenXLS(bytes.NewReader(buf.Bytes()))
+	xls, err := OpenXLS(bytes.NewReader(body))
 	if err != nil {
 		return nil, errors.Wrap(err, "xls parse")
 	}
