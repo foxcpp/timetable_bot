@@ -176,7 +176,7 @@ func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {
 	for i, ent := range e {
 		res[i] = Entry{
 			TimeSlotSet(date, config.TimeslotsBegin[ent.Sequence-1]),
-			types[strings.ToLower(ent.Type)],
+			lang.LessonTypeStrs[strings.ToLower(ent.Type)],
 			ent.Classroom,
 			ent.Lecturer,
 			ent.Name,
@@ -190,7 +190,6 @@ func updateTimetable(from time.Time, to time.Time) error {
 	if err != nil {
 		return errors.Wrapf(err, "table download %v-%v", from, to)
 	}
-
 	for date, entriesRaw := range entriesRawFull {
 		entries := FromRaw(date, entriesRaw)
 		y, err := db.BatchFillable(date)

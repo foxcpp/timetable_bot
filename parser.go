@@ -9,15 +9,6 @@ import (
 	"time"
 )
 
-var types = map[string]LessonType{
-	"лб":           Lab,
-	"лабараторная": Lab,
-	"пз":           Practice,
-	"практическое": Practice,
-	"лк":           Lecture,
-	"лекция":       Lecture,
-}
-
 func TimeSlotSet(t time.Time, slot TimeSlot) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), slot.Hour, slot.Minute, 0, 0, t.Location())
 }
@@ -47,7 +38,7 @@ func SplitEntry(in string, day time.Time) (Entry, error) {
 	res.Time = TimeSlotSet(day, config.TimeslotsBegin[n-1])
 
 	var prs bool
-	res.Type, prs = types[strings.ToLower(submatches[4])]
+	res.Type, prs = lang.LessonTypeStrs[strings.ToLower(submatches[4])]
 	if !prs {
 		log.Println()
 		return Entry{}, ErrUnknownType
