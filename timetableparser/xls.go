@@ -11,7 +11,7 @@ import (
 
 var dateRegex = regexp.MustCompile(`\d\d\.\d\d.\d\d\d\d`)
 var timeslotRegex = regexp.MustCompile(`(\d+) пара: \d\d:\d\d-\d\d:\d\d`)
-var entryRegexp = regexp.MustCompile(`(.+)\[(Лк|Пз|Лб)\] \nауд\. (.+)\n(.+)`)
+var entryRegexp = regexp.MustCompile(`(.+)\[(Лк|Пз|Лб|Зач|Экз)\] \nауд\. (.+)\n(.+)`)
 
 type RawEntry struct {
 	Sequence  int

@@ -2,10 +2,14 @@ lesson_types:
   0: Lab
   1: Practice
   2: Lecture
+  3: Credit
+  4: Exam
 lesson_types_short:
   lab: 0
   practice: 1
   lecture: 2
+  credit: 3
+  exam: 4
 help: |
   /help - _This text_
   /admin - _Help on admin commands_
