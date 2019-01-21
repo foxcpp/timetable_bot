@@ -9,6 +9,10 @@ token: BOT_TOKEN
 # db somewhere else - copy them too.
 dbfile: timetable.db
 
+# Goroutines to start for command processing. Important to make bot more resistant to commands flood.
+# Set to some arbitrary value not equal to 0 or 4.
+cmd_processing_goroutines: 4
+
 # UIDs of people who will be able to modify timetable.
 # using commands from /adminhelp.
 admins:
