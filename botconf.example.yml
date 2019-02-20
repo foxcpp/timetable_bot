@@ -4,10 +4,9 @@ lang: ru.yml
 # Telegram Bot API token. Get one from @BotFather.
 token: BOT_TOKEN
 
-# Where database will be stored. Note that in addition to timetable.db
-# timetable.db-wal and timetable.db-shm will be created. You you want to move
-# db somewhere else - copy them too.
-dbfile: timetable.db
+# SQL config to use for DB.
+driver: sqlite3
+dsn: /var/lib/timetable_bot/timetable_bot.db
 
 # Goroutines to start for command processing. Important to make bot more resistant to commands flood.
 # Set to some arbitrary value not equal to 0 or 4.

@@ -3,9 +3,11 @@ package main
 import (
 	"database/sql"
 	"github.com/pkg/errors"
+	"strings"
 	"time"
 )
 import _ "github.com/mattn/go-sqlite3"
+import _ "github.com/go-sql-driver/mysql"
 
 type LessonType int
 
@@ -33,39 +35,51 @@ type DB struct {
 	exactGet      *sql.Stmt
 }
 
-func NewDB(path string) (*DB, error) {
+func NewDB(driver, dsn string) (*DB, error) {
 	db := new(DB)
 	var err error
-	db.d, err = sql.Open("sqlite3", path+"?_journal=WAL&cache=shared")
+
+	if driver == "sqlite3" && !strings.HasPrefix(dsn, "file:") {
+		dsn = "file:" + dsn + "?_journal=WAL&cache=shared"
+	}
+
+	db.d, err = sql.Open(driver, dsn)
 	if err != nil {
 		return nil, errors.Wrap(err, "open")
 	}
 
-	if _, err := db.d.Exec(`PRAGMA journal_mode = WAL`); err != nil {
-		return nil, errors.Wrap(err, "set pragma journal mode")
+	if driver == "sqlite3" {
+		if _, err := db.d.Exec(`PRAGMA journal_mode = WAL`); err != nil {
+			return nil, errors.Wrap(err, "set pragma journal mode")
+		}
+		if _, err := db.d.Exec(`PRAGMA synchronous = NORMAL`); err != nil {
+			return nil, errors.Wrap(err, "set pragma synchronous")
+		}
 	}
-	if _, err := db.d.Exec(`PRAGMA synchronous = NORMAL`); err != nil {
-		return nil, errors.Wrap(err, "set pragma synchronous")
+	if driver == "mysql" {
+		if _, err := db.d.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"); err != nil {
+			return nil, errors.Wrap(err, "set session isolation level")
+		}
 	}
 	if _, err := db.d.Exec(`
             CREATE TABLE IF NOT EXISTS events (
-                year INT NOT NULL
+                year INTEGER NOT NULL
                 CHECK(year >= 2018),
-                month INT NOT NULL
+                month INTEGER NOT NULL
                 CHECK(month >= 1 AND month <= 12),
-                day INT NOT NULL
+                day INTEGER NOT NULL
                 CHECK(day >= 1 AND day <= 31),
-                hour INT NOT NULL
+                hour INTEGER NOT NULL
                 CHECK(hour >= 0 AND hour <= 23),
-                minute INT NOT NULL
+                minute INTEGER NOT NULL
                 CHECK(minute >= 0 AND minute <= 59),
 
-                type INT NOT NULL,
-                classroom TEXT NOT NULL,
-                lecturer TEXT NOT NULL,
-                name TEXT NOT NULL,
+                type INTEGER NOT NULL,
+                classroom INTEGER NOT NULL,
+                lecturer INTEGER NOT NULL,
+                name INTEGER NOT NULL,
 
-                batchfilled INT NOT NULL DEFAULT 0,
+                batchfilled INTEGER NOT NULL DEFAULT 0,
 
                 UNIQUE (year, month, day, hour, minute)
             )
