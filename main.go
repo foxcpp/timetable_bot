@@ -64,7 +64,8 @@ func ttindex(slot TimeSlot) int {
 type Config struct {
 	Lang              string `yaml:"lang"`
 	Token             string `yaml:"token"`
-	DBfile            string `yaml:"dbfile"`
+	Driver            string `yaml:"driver"`
+	DSN               string `yaml:"dsn"`
 	CmdProcGoroutines int    `yaml:"cmd_processing_goroutines"`
 
 	Admins []int `yaml:"admins"`
@@ -261,11 +262,10 @@ func main() {
 		log.SetFlags(0)
 	}
 
-	if len(os.Args) != 3 {
-		log.Fatalln("Usage:", os.Args[0], "<config file> <db file>")
+	if len(os.Args) != 2 {
+		log.Fatalln("Usage:", os.Args[0], "<config file>")
 	}
 	configPath := os.Args[1]
-	DBFile := os.Args[2]
 
 	confFile, err := ioutil.ReadFile(configPath)
 	if err != nil {
@@ -292,14 +292,14 @@ func main() {
 	log.Println("- Lang file:", config.Lang)
 	log.Println("- Token:", config.Token[:10]+"...")
 	log.Println("- Timezone:", timezone)
-	log.Println("- DB file:", DBFile)
+	log.Println("- DB driver:", config.Driver)
 	log.Println("- Admins:", config.Admins)
 	log.Println("- Notify targets:", config.NotifyChats)
 	log.Printf("- Auto-update: %+v\n", config.AutoUpdate)
 	log.Println("- Group members:", len(config.GroupMembers), "people")
 	log.Println("- Notify: in", config.NotifyInMins, "before begin; on end:", config.NotifyOnEnd, "; on break:", config.NotifyOnBreak)
 
-	db, err = NewDB(DBFile)
+	db, err = NewDB(config.Driver, config.DSN)
 	if err != nil {
 		log.Fatalln("Failed to open DB:", err)
 	}

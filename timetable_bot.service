@@ -5,7 +5,7 @@ After=network-online.target
 [Service]
 Type=notify
 NotifyAccess=all
-ExecStart=/usr/bin/timetable-bot /etc/timetable-bot.yml /var/lib/timetable-bot/table.db
+ExecStart=/usr/bin/timetable-bot /etc/timetable-bot.yml
 Restart=on-failure
 StateDirectory=timetable-bot
 DynamicUser=yes
