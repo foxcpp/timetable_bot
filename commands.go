@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/slongfield/pyfmt"
 	"log"
-	"math/rand"
 	"strings"
 	"time"
 )
@@ -231,26 +230,9 @@ func evictCmd(msg *tgbotapi.Message) error {
 	return nil
 }
 
-func booksCmd(msg *tgbotapi.Message) error {
-	if len(config.GroupMembers) == 0 {
-		if _, err := replyTo(msg, lang.Replies.BooksCommandDisabled, nil); err != nil {
-			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
-		}
-	}
+func easterEgg(msg *tgbotapi.Message) error {
+	rpl := tgbotapi.NewStickerShare(msg.Chat.ID, "CAADAQADcykAAnj8xgXDDcRyRS7wuAI")
+	bot.Send(rpl)
 
-	var r1, r2 int
-	for r1 == r2 {
-		r1 = rand.Intn(len(config.GroupMembers))
-		r2 = rand.Intn(len(config.GroupMembers))
-	}
-
-	reply := fmt.Sprintf("%s и %s", config.GroupMembers[r1], config.GroupMembers[r2])
-	if _, err := replyTo(msg, reply, nil); err != nil {
-		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
-	}
 	return nil
-}
-
-func init() {
-	rand.Seed(time.Now().Unix())
 }

@@ -109,22 +109,19 @@ type LangStrings struct {
 	TimeslotFormat  string `yaml:"timeslot_format"`
 }
 
-func extractCommand(update *tgbotapi.Update) string {
-	if update == nil || update.Message == nil || update.Message.Text == "" {
-		return ""
-	}
-	if update.Message.Entities == nil {
+func extractCommand(msg *tgbotapi.Message) string {
+	if msg.Entities == nil {
 		return ""
 	}
 
-	for _, entity := range *update.Message.Entities {
+	for _, entity := range *msg.Entities {
 		if entity.Type != "bot_command" {
 			return ""
 		}
 		if entity.Offset != 0 {
 			return ""
 		}
-		fullCmd := update.Message.Text[:entity.Length]
+		fullCmd := msg.Text[:entity.Length]
 		if strings.Contains(fullCmd, "@") && !strings.HasSuffix(fullCmd, bot.Self.UserName) {
 			return ""
 		}
@@ -160,7 +157,17 @@ func processUpdates(updates <-chan tgbotapi.Update) {
 					update.CallbackQuery.ID, err)
 			}
 		} else {
-			command := extractCommand(&update)
+			if update.Message == nil || update.Message.Text == "" {
+				continue
+			}
+			msg := update.Message
+
+			if msg.Text == "<3" && msg.ReplyToMessage != nil && msg.ReplyToMessage.From.ID == bot.Self.ID {
+				easterEgg(msg)
+				continue
+			}
+
+			command := extractCommand(msg)
 			if command == "" {
 				continue
 			}
@@ -168,28 +175,26 @@ func processUpdates(updates <-chan tgbotapi.Update) {
 			var err error
 			switch command {
 			case "today":
-				err = todayCmd(update.Message)
+				err = todayCmd(msg)
 			case "tomorrow":
-				err = tomorrowCmd(update.Message)
+				err = tomorrowCmd(msg)
 			case "next":
-				err = nextCmd(update.Message)
+				err = nextCmd(msg)
 			case "timetable":
-				err = timetableCmd(update.Message)
+				err = timetableCmd(msg)
 			case "help":
-				err = helpCmd(update.Message)
+				err = helpCmd(msg)
 			case "adminhelp":
-				err = adminHelpCmd(update.Message)
+				err = adminHelpCmd(msg)
 			case "schedule":
-				err = scheduleCmd(update.Message)
+				err = scheduleCmd(msg)
 			case "evict":
-				err = evictCmd(update.Message)
-			case "books":
-				err = booksCmd(update.Message)
+				err = evictCmd(msg)
 			}
 
 			if err != nil {
 				log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
-					command, update.Message.Chat.ID, update.Message.MessageID, update.Message.From.ID, err)
+					command, msg.Chat.ID, msg.MessageID, msg.From.ID, err)
 			}
 		}
 	}
