@@ -12,13 +12,13 @@ import (
 
 var tableUrl = `http://e-rozklad.dut.edu.ua/timeTable/groupExcel?type=0`
 
-type AutoUpdateCfg struct {
+type Cfg struct {
 	Course  int `yaml:"course"`
 	Faculty int `yaml:"faculty"`
 	Group   int `yaml:"group"`
 }
 
-func DownloadTable(from, to time.Time, cfg AutoUpdateCfg) (map[time.Time][]RawEntry, error) {
+func Download(from, to time.Time, cfg Cfg) (map[time.Time][]RawEntry, error) {
 	form := url.Values{
 		"timeTable":              {"0"},
 		"TimeTableForm[course]":  {strconv.Itoa(cfg.Course)},

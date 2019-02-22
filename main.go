@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/foxcpp/timetable_bot/timetableparser"
+	"github.com/foxcpp/timetable_bot/ttparser"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/jasonlvhit/gocron"
 	"github.com/pkg/errors"
@@ -20,7 +20,7 @@ import (
 )
 
 var bot *tgbotapi.BotAPI
-var db *DB
+var cache *Cache
 var config Config
 var lang LangStrings
 
@@ -80,8 +80,8 @@ type Config struct {
 	TimeslotsBreak []TimeSlot `yaml:"timeslots_break"`
 	TimeslotsEnd   []TimeSlot `yaml:"timeslots_end"`
 
-	AutoUpdate   ttparser.AutoUpdateCfg `yaml:"autoupdate"`
-	GroupMembers []string               `yaml:"group_members"`
+	SourceCfg    ttparser.Cfg `yaml:"source_cfg"`
+	GroupMembers []string     `yaml:"group_members"`
 }
 
 type LangStrings struct {
@@ -90,29 +90,19 @@ type LangStrings struct {
 	Help           string                `yaml:"help"`
 	AdminHelp      string                `yaml:"adminhelp"`
 	Usage          struct {
-		Set      string `yaml:"set"`
-		Clear    string `yaml:"clear"`
 		Schedule string `yaml:"schedule"`
-		Update   string `yaml:"update"`
+		Evict    string `yaml:"evict"`
 	} `yaml:"usage"`
 	Replies struct {
 		SomethingBroke       string `yaml:"something_broke"`
 		MissingPermissions   string `yaml:"missing_permissions"`
 		InvalidDate          string `yaml:"invalid_date"`
-		TimetableSet         string `yaml:"timetable_set"`
-		TimetableClear       string `yaml:"timetable_clear"`
 		TimetableHeader      string `yaml:"timetable_header"`
 		Empty                string `yaml:"empty"`
 		BooksCommandDisabled string `yaml:"books_command_disabled"`
 		BooksCommand         string `yaml:"books_command"`
 		NoMoreLessonsToday   string `yaml:"no_more_lessons_today"`
 	} `yaml:"replies"`
-	ParseErrors struct {
-		UnexpectedError        string `yaml:"unexpected_error"`
-		InvalidTimetableFormat string `yaml:"invalid_timetable_format"`
-		TooManyLessons         string `yaml:"too_many_lessons"`
-		InvalidLessonType      string `yaml:"invalid_lesson_type"`
-	} `yaml:"parse_errors"`
 	EntryTemplate   string `yaml:"entry_template"`
 	LessonEndNotify string `yaml:"lesson_end_notify"`
 	BreakNotify     string `yaml:"break_notify"`
@@ -145,19 +135,6 @@ func extractCommand(update *tgbotapi.Update) string {
 	return ""
 }
 
-func updateNextWeekTimetable() {
-	nextWeek := time.Now().In(timezone)
-	for nextWeek.Weekday() != time.Monday {
-		nextWeek = nextWeek.AddDate(0, 0, 1)
-	}
-
-	log.Println("Updating next-week timetable")
-
-	if err := updateTimetable(nextWeek, nextWeek.AddDate(0, 0, 6)); err != nil {
-		log.Println("ERROR: while updating timetable", err)
-	}
-}
-
 func formatEntry(entry Entry) string {
 	ttindx := ttindex(TimeSlot{entry.Time.Hour(), entry.Time.Minute()})
 
@@ -170,40 +147,6 @@ func formatEntry(entry Entry) string {
 		"type":      lang.LessonTypes[entry.Type],
 		"lecturer":  entry.Lecturer,
 	})
-}
-
-func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {
-	res := make([]Entry, len(e))
-	for i, ent := range e {
-		res[i] = Entry{
-			TimeSlotSet(date, config.TimeslotsBegin[ent.Sequence-1]),
-			lang.LessonTypeStrs[strings.ToLower(ent.Type)],
-			ent.Classroom,
-			ent.Lecturer,
-			ent.Name,
-		}
-	}
-	return res
-}
-
-func updateTimetable(from time.Time, to time.Time) error {
-	entriesRawFull, err := ttparser.DownloadTable(from, to, config.AutoUpdate)
-	if err != nil {
-		return errors.Wrapf(err, "table download %v-%v", from, to)
-	}
-	for date, entriesRaw := range entriesRawFull {
-		entries := FromRaw(date, entriesRaw)
-		y, err := db.BatchFillable(date)
-		if err != nil {
-			panic(err)
-		}
-		if y {
-			if err := db.ReplaceDay(date, entries, true); err != nil {
-				return errors.Wrapf(err, "db update %v", err)
-			}
-		}
-	}
-	return nil
 }
 
 func processUpdates(updates <-chan tgbotapi.Update) {
@@ -230,8 +173,6 @@ func processUpdates(updates <-chan tgbotapi.Update) {
 				err = tomorrowCmd(update.Message)
 			case "next":
 				err = nextCmd(update.Message)
-			case "set":
-				err = setCmd(update.Message)
 			case "timetable":
 				err = timetableCmd(update.Message)
 			case "help":
@@ -240,10 +181,8 @@ func processUpdates(updates <-chan tgbotapi.Update) {
 				err = adminHelpCmd(update.Message)
 			case "schedule":
 				err = scheduleCmd(update.Message)
-			case "clear":
-				err = clearCmd(update.Message)
-			case "update":
-				err = updateCmd(update.Message)
+			case "evict":
+				err = evictCmd(update.Message)
 			case "books":
 				err = booksCmd(update.Message)
 			}
@@ -292,25 +231,19 @@ func main() {
 	log.Println("- Lang file:", config.Lang)
 	log.Println("- Token:", config.Token[:10]+"...")
 	log.Println("- Timezone:", timezone)
-	log.Println("- DB driver:", config.Driver)
 	log.Println("- Admins:", config.Admins)
 	log.Println("- Notify targets:", config.NotifyChats)
-	log.Printf("- Auto-update: %+v\n", config.AutoUpdate)
+	log.Printf("- Source: %+v\n", config.SourceCfg)
 	log.Println("- Group members:", len(config.GroupMembers), "people")
 	log.Println("- Notify: in", config.NotifyInMins, "before begin; on end:", config.NotifyOnEnd, "; on break:", config.NotifyOnBreak)
 
-	db, err = NewDB(config.Driver, config.DSN)
-	if err != nil {
-		log.Fatalln("Failed to open DB:", err)
-	}
-
+	cache = NewCache()
 	bot, err = tgbotapi.NewBotAPI(config.Token)
 	if err != nil {
 		log.Fatalln("Failed to init Bot API:", err)
 	}
 
 	gocron.Every(1).Minute().Do(checkNotifications)
-	gocron.Every(1).Day().At("00:00").Do(updateNextWeekTimetable)
 	gocron.Start()
 
 	u := tgbotapi.NewUpdate(0)

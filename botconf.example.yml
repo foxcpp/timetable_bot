@@ -4,10 +4,6 @@ lang: ru.yml
 # Telegram Bot API token. Get one from @BotFather.
 token: BOT_TOKEN
 
-# SQL config to use for DB.
-driver: sqlite3
-dsn: /var/lib/timetable_bot/timetable_bot.db
-
 # Goroutines to start for command processing. Important to make bot more resistant to commands flood.
 # Set to some arbitrary value not equal to 0 or 4.
 cmd_processing_goroutines: 4
@@ -59,8 +55,7 @@ timeslots_break:
 - 14:15
 - 16:00
 
-# Parameters for timetable auto-updater.
-autoupdate:
+source_cfg:
   group: 0
   faculty: 0
   course: 0

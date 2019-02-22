@@ -24,7 +24,7 @@ func checkNotifications() {
 		}
 	}
 
-	entries, err := db.OnDay(now)
+	entries, err := cache.OnDay(now)
 	if err != nil {
 		log.Printf("ERROR: While querying entries for %v: %v.\n", now, err)
 		return
@@ -36,7 +36,7 @@ func checkNotifications() {
 		broadcastNotify(formatEntry(entries[0]))
 	}
 
-	entry, err := db.ExactGet(now.Add(time.Minute * time.Duration(config.NotifyInMins)))
+	entry, err := cache.ExactGet(now.Add(time.Minute * time.Duration(config.NotifyInMins)))
 	if err != nil {
 		log.Printf("ERROR: While querying entry for %v: %v.\n", now.Add(time.Minute*time.Duration(config.NotifyInMins)), err)
 		return
