@@ -94,14 +94,12 @@ type LangStrings struct {
 		Evict    string `yaml:"evict"`
 	} `yaml:"usage"`
 	Replies struct {
-		SomethingBroke       string `yaml:"something_broke"`
-		MissingPermissions   string `yaml:"missing_permissions"`
-		InvalidDate          string `yaml:"invalid_date"`
-		TimetableHeader      string `yaml:"timetable_header"`
-		Empty                string `yaml:"empty"`
-		BooksCommandDisabled string `yaml:"books_command_disabled"`
-		BooksCommand         string `yaml:"books_command"`
-		NoMoreLessonsToday   string `yaml:"no_more_lessons_today"`
+		SomethingBroke     string `yaml:"something_broke"`
+		MissingPermissions string `yaml:"missing_permissions"`
+		InvalidDate        string `yaml:"invalid_date"`
+		TimetableHeader    string `yaml:"timetable_header"`
+		Empty              string `yaml:"empty"`
+		NoMoreLessonsToday string `yaml:"no_more_lessons_today"`
 	} `yaml:"replies"`
 	EntryTemplate   string `yaml:"entry_template"`
 	LessonEndNotify string `yaml:"lesson_end_notify"`

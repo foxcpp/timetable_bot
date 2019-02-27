@@ -42,8 +42,6 @@ replies:
   invalid_date: 'Некорректный формат даты. Пример: 12.09.18.'
   timetable_header: "*Расписание на {date}*\n\n"
   empty: '_пусто_'
-  books_command_disabled: 'Команда выключена; в конфиге нет списка группы.'
-  books_command: '{} и {}'
   no_more_lessons_today: 'Сегодня больше нет пар.'
 entry_template: |-
   *{num}. Аудитория {classroom} - {name}*

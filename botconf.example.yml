@@ -59,9 +59,3 @@ source_cfg:
   group: 0
   faculty: 0
   course: 0
-
-# List of group members. If you want to use /books command. :)
-group_members:
-- Name
-- Name
-- Name

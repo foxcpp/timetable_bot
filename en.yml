@@ -38,8 +38,6 @@ replies:
   invalid_date: 'Invalid date format'
   timetable_header: "*Timetable for {date}*\n\n"
   empty: _empty_
-  books_command_disabled: 'Command disabled; no group members list set.'
-  books_command: '{} and {}'
   no_more_lessons_today: 'No more lessions today.'
 entry_template: |-
   *{num}. Classroom {classroom} - {name}*
