@@ -177,6 +177,7 @@ func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {
 			ent.Name,
 		}
 	}
+	log.Printf("Parsed entries: %+v", res)
 	return res
 }
 

@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"log"
 )
 
 var dateRegex = regexp.MustCompile(`\d\d\.\d\d.\d\d\d\d`)
 var timeslotRegex = regexp.MustCompile(`(\d+) пара: \d\d:\d\d-\d\d:\d\d`)
-var entryRegexp = regexp.MustCompile(`(.+)\[(Лк|Пз|Лб|Зач|Экз)\] \nауд\. (.+)\n(.+)`)
+var entryRegexp = regexp.MustCompile(`(.+)\[(Лк|Пз|Лб|Зач|Экз|Сем)\] .+\nауд\. (.+)\n(.+)`)
 
 type RawEntry struct {
 	Sequence  int
@@ -69,5 +70,8 @@ func ReadEntries(book *xls.WorkBook) (map[time.Time][]RawEntry, error) {
 	if !curDate.IsZero() && len(entries) != 0 {
 		res[curDate] = entries
 	}
+
+	log.Printf("Raw entries: %+v", res)
+
 	return res, nil
 }
