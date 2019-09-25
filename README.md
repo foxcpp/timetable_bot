@@ -6,7 +6,7 @@ are most likely need to modify it if you want to use it.
 
 ### Installation
 
-Build using regular Go tools (make sure you have C compiler because we use SQLite).
+Build using regular Go tools.
 Populate config (see below).
 
 ### Configuration
