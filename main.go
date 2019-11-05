@@ -10,12 +10,14 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"encoding/json"
 
 	"github.com/foxcpp/timetable_bot/ttparser"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/jasonlvhit/gocron"
 	"github.com/pkg/errors"
 	"github.com/slongfield/pyfmt"
+	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v2"
 )
 
@@ -63,6 +65,8 @@ func ttindex(slot TimeSlot) int {
 
 type Config struct {
 	Lang              string `yaml:"lang"`
+	Webhook			  string `yaml:"webhook"`
+	Port              string `yaml:"port"`
 	Token             string `yaml:"token"`
 	Driver            string `yaml:"driver"`
 	DSN               string `yaml:"dsn"`
@@ -220,6 +224,12 @@ func main() {
 	if token := os.Getenv("TT_TOKEN"); token != "" {
 		config.Token = token
 	}
+	if url := os.Getenv("TT_WEBHOOK"); url != "" {
+		config.Webhook = url
+		if port := os.Getenv("TT_PORT"); port != "" {
+			config.Port = port
+		}
+	}
 
 	langFile, err := ioutil.ReadFile(config.Lang)
 	if err != nil {
@@ -240,7 +250,7 @@ func main() {
 	log.Println("- Timezone:", timezone)
 	log.Println("- Admins:", config.Admins)
 	log.Println("- Notify targets:", config.NotifyChats)
-	log.Printf("- Source: %+v\n", config.SourceCfg)
+	log.Printf ("- Source: %+v\n", config.SourceCfg)
 	log.Println("- Group members:", len(config.GroupMembers), "people")
 	log.Println("- Notify: in", config.NotifyInMins, "before begin; on end:", config.NotifyOnEnd, "; on break:", config.NotifyOnBreak)
 
@@ -253,14 +263,52 @@ func main() {
 	gocron.Every(1).Minute().Do(checkNotifications)
 	gocron.Start()
 
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 25
-	updates, err := bot.GetUpdatesChan(u)
-	if err != nil {
-		log.Fatalln("Failed to init. updates channel:", err)
+	var updates tgbotapi.UpdatesChannel
+
+	// Webhook is preferred over longpolling.
+	if config.Webhook != "" {
+		_, err := bot.SetWebhook(tgbotapi.NewWebhook(config.Webhook))
+		if err != nil {
+			log.Fatalln("Failed to init. webhook:", err)
+		}
+		ch := make(chan tgbotapi.Update, bot.Buffer)
+		updates = ch
+		router := gin.New()
+		router.Use(gin.Logger())
+		router.POST("/" + bot.Token, func(c *gin.Context) {
+			defer c.Request.Body.Close()
+
+			bytes, err := ioutil.ReadAll(c.Request.Body)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			var update tgbotapi.Update
+			err = json.Unmarshal(bytes, &update)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			ch <- update
+		})
+		go func() {
+			err := router.Run(":" + config.Port)
+			if err != nil {
+				log.Fatalln("HTTP server failure. router error:", err)
+			}
+		}()
+	} else {
+		u := tgbotapi.NewUpdate(0)
+		u.Timeout = 25
+		updates, err = bot.GetUpdatesChan(u)
+		if err != nil {
+			log.Fatalln("Failed to init. updates channel:", err)
+		}
 	}
 
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGHUP, os.Interrupt)
 
 	log.Println("Started.")

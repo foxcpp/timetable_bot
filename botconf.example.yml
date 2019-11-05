@@ -1,6 +1,12 @@
 # File with strings to use.
 lang: ru.yml
 
+# Webhook URL for Telegram to send updates to.
+webhook: WEBHOOK_URL
+
+# Port to listen for HTTP connections on.
+port: 8080
+
 # Telegram Bot API token. Get one from @BotFather.
 token: BOT_TOKEN
 
