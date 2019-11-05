@@ -217,6 +217,10 @@ func main() {
 		log.Fatalln("Failed to decode config file (botconf.yml):", err)
 	}
 
+	if token := os.Getenv("TT_TOKEN"); token != "" {
+		config.Token = token
+	}
+
 	langFile, err := ioutil.ReadFile(config.Lang)
 	if err != nil {
 		log.Fatalln("Failed read lang file:", err)

@@ -13,6 +13,8 @@ Populate config (see below).
 
 botconf.yml should exist in current working directory.
 [Documented example](botconf.example.yml) is included in repo.
+You may specify the bot token via `TT_TOKEN` environment variable -
+this overrides the config value.
 
 ### Auto-update
 
