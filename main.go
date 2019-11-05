@@ -148,6 +148,49 @@ func formatEntry(entry Entry) string {
 	})
 }
 
+// webhookUpdatesPoller starts a HTTP push-delivery method.
+func webhookUpdatesPoller(bot *tgbotapi.BotAPI) (tgbotapi.UpdatesChannel, error) {
+	_, err := bot.SetWebhook(tgbotapi.NewWebhook(config.Webhook))
+	if err != nil {
+		log.Fatalln("Failed to init. webhook:", err)
+	}
+	ch := make(chan tgbotapi.Update, bot.Buffer)
+	router := gin.New()
+	router.Use(gin.Logger())
+	router.POST("/" + bot.Token, func(c *gin.Context) {
+		defer c.Request.Body.Close()
+
+		bytes, err := ioutil.ReadAll(c.Request.Body)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		var update tgbotapi.Update
+		err = json.Unmarshal(bytes, &update)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		ch <- update
+	})
+	go func() {
+		err := router.Run(":" + config.Port)
+		if err != nil {
+			log.Fatalln("HTTP server failure. router error:", err)
+		}
+	}()
+	return ch, nil
+}
+
+// longUpdatesPoller starts a pull-based (longpolling) updates delivery method.
+func longUpdatesPoller(bot *tgbotapi.BotAPI) (tgbotapi.UpdatesChannel, error) {
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 25
+	return bot.GetUpdatesChan(u)
+}
+
 func processUpdates(updates <-chan tgbotapi.Update) {
 	for {
 		update := <-updates
@@ -267,45 +310,12 @@ func main() {
 
 	// Webhook is preferred over longpolling.
 	if config.Webhook != "" {
-		_, err := bot.SetWebhook(tgbotapi.NewWebhook(config.Webhook))
-		if err != nil {
-			log.Fatalln("Failed to init. webhook:", err)
-		}
-		ch := make(chan tgbotapi.Update, bot.Buffer)
-		updates = ch
-		router := gin.New()
-		router.Use(gin.Logger())
-		router.POST("/" + bot.Token, func(c *gin.Context) {
-			defer c.Request.Body.Close()
-
-			bytes, err := ioutil.ReadAll(c.Request.Body)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			var update tgbotapi.Update
-			err = json.Unmarshal(bytes, &update)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			ch <- update
-		})
-		go func() {
-			err := router.Run(":" + config.Port)
-			if err != nil {
-				log.Fatalln("HTTP server failure. router error:", err)
-			}
-		}()
+		updates, err = webhookUpdatesPoller(bot)
 	} else {
-		u := tgbotapi.NewUpdate(0)
-		u.Timeout = 25
-		updates, err = bot.GetUpdatesChan(u)
-		if err != nil {
-			log.Fatalln("Failed to init. updates channel:", err)
-		}
+		updates, err = longUpdatesPoller(bot)
+	}
+	if err != nil {
+		log.Fatalln("Failed to init poller:", err)
 	}
 
 	sig := make(chan os.Signal, 1)
