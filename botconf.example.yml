@@ -1,16 +1,18 @@
-# File with strings to use.
+# File with strings translations to use.
 lang: ru.yml
 
-# Webhook URL for Telegram to send updates to.
-webhook: WEBHOOK_URL
+# Webhook URL for Telegram to send updates to. Leave empty to use
+# longpolling instead.
+webhook:
 
-# Port to listen for HTTP connections on.
+# Port to listen for HTTP connections on. Has no effect if webhook is empty.
 port: 8080
 
 # Telegram Bot API token. Get one from @BotFather.
 token: BOT_TOKEN
 
-# Goroutines to start for command processing. Important to make bot more resistant to commands flood.
+# Goroutines to start for command processing. Important to make bot more
+# resistant to commands flood.
 # Set to some arbitrary value not equal to 0 or 4.
 cmd_processing_goroutines: 4
 
@@ -20,7 +22,8 @@ admins:
 - 483124458
 
 # Where notifications about timetable entries should be sent.
-# Can be: UID (to send in PM) or GID (to send to group) or channel ID (to send to channel, ofc).
+# Can be: UID (to send in PM) or GID (to send to group) or channel ID (to
+# send to channel, ofc).
 notify_chats:
 - -1007165849235
 
@@ -34,7 +37,8 @@ notify_on_end: false
 notify_on_break: false
 
 # Timezone to use for timetable.
-# https://en.wikipedia.org/wiki/List_of_tz_database_time_zones (TZ column is value you want to put here)
+# https://en.wikipedia.org/wiki/List_of_tz_database_time_zones (TZ column
+# is value you want to put here)
 timezone: Europe/Kiev
 
 # When lessons start. First entry corresponds to first lesson and etc.
@@ -53,7 +57,8 @@ timeslots_end:
 - 15:05
 - 16:05
 
-# Break in middle of lesson (if any). First entry corresponds to first lesson and etc.
+# Break in middle of lesson (if any). First entry corresponds to first
+# lesson and etc.
 timeslots_break:
 - 8:45
 - 10:30
