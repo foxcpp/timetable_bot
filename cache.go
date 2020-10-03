@@ -26,6 +26,7 @@ type Entry struct {
 	Classroom string
 	Lecturer  string
 	Name      string
+	Notes	  string
 }
 
 type cachedEntries struct {
@@ -120,6 +121,7 @@ func (c *Cache) downloadWeek(day time.Time) error {
 	c.cacheLck.Lock()
 	defer c.cacheLck.Unlock()
 	for fromDay.Before(toDay.Add(24 * time.Hour)) {
+		log.Printf("Key: %+v", StripTime(fromDay, time.UTC))
 		c.cache[fromDay] = cachedEntries{
 			entries:     FromRaw(fromDay, rawTable[StripTime(fromDay, time.UTC)]),
 			retrievedOn: time.Now(),
@@ -168,16 +170,17 @@ func (c *Cache) Evict(date time.Time) {
 
 func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {
 	res := make([]Entry, len(e))
+	log.Printf("Raw entries: %+v", e)
 	for i, ent := range e {
 		res[i] = Entry{
-			TimeSlotSet(date, config.TimeslotsBegin[ent.Sequence-1]),
-			lang.LessonTypeStrs[strings.ToLower(ent.Type)],
-			ent.Classroom,
-			ent.Lecturer,
-			ent.Name,
+			Time:      TimeSlotSet(date, config.TimeslotsBegin[ent.Sequence-1]),
+			Type:      lang.LessonTypeStrs[strings.ToLower(ent.Type)],
+			Classroom: ent.Classroom,
+			Lecturer:  ent.Lecturer,
+			Name:      ent.Name,
+			Notes:     ent.Notes,
 		}
 	}
-	log.Printf("Parsed entries: %+v", res)
 	return res
 }
 
