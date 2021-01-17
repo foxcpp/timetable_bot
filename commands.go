@@ -94,6 +94,8 @@ func scheduleCmd(msg *tgbotapi.Message) error {
 	if err != nil {
 		if _, ok := err.(StaleEntriesError); ok {
 			staleEntries = true
+			log.Printf("ERROR: sending stale entries for %v to chatid=%d,msgid=%d,uid=%d: %v\n",
+				day, msg.Chat.ID, msg.MessageID, msg.From.ID, err)
 		} else {
 			reportError(err, msg)
 			return err
@@ -115,6 +117,8 @@ func todayCmd(msg *tgbotapi.Message) error {
 	if err != nil {
 		if _, ok := err.(StaleEntriesError); ok {
 			staleEntries = true
+			log.Printf("ERROR: sending stale entries for %v to chatid=%d,msgid=%d,uid=%d: %v\n",
+				now, msg.Chat.ID, msg.MessageID, msg.From.ID, err)
 		} else {
 			reportError(err, msg)
 			return err
@@ -136,6 +140,8 @@ func tomorrowCmd(msg *tgbotapi.Message) error {
 	if err != nil {
 		if _, ok := err.(StaleEntriesError); ok {
 			staleEntries = true
+			log.Printf("ERROR: sending stale entries for %v to chatid=%d,msgid=%d,uid=%d: %v\n",
+				tomorrow, msg.Chat.ID, msg.MessageID, msg.From.ID, err)
 		} else {
 			reportError(err, msg)
 			return err
@@ -213,6 +219,8 @@ func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
 	if err != nil {
 		if _, ok := err.(StaleEntriesError); ok {
 			staleEntries = true
+			log.Printf("ERROR: sending stale entries for %v to chatid=%d,msgid=%d,uid=%d: %v\n",
+				date, query.Message.Chat.ID, query.Message.MessageID, query.From.ID, err)
 		} else {
 			return errors.Wrap(err, "cache query")
 		}
