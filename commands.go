@@ -43,10 +43,17 @@ func adminHelpCmd(msg *tgbotapi.Message) error {
 	return err
 }
 
-func formatTimetable(date time.Time, entries []Entry) string {
-	hdr := pyfmt.Must(lang.Replies.TimetableHeader, map[string]interface{}{
-		"date": date.Format("_2 January  2006"),
-	})
+func formatTimetable(date time.Time, entries []Entry, staleEntries bool) string {
+	var hdr string
+	if staleEntries {
+		hdr = pyfmt.Must(lang.Replies.TimetableHeaderStale, map[string]interface{}{
+			"date": date.Format("_2 January  2006"),
+		})
+	} else {
+		hdr = pyfmt.Must(lang.Replies.TimetableHeader, map[string]interface{}{
+			"date": date.Format("_2 January  2006"),
+		})
+	}
 	entriesStr := make([]string, len(entries))
 	for i, entry := range entries {
 		entriesStr[i] = formatEntry(entry)
@@ -83,12 +90,17 @@ func scheduleCmd(msg *tgbotapi.Message) error {
 	}
 
 	entries, err := cache.OnDay(day)
+	staleEntries := false
 	if err != nil {
-		reportError(err, msg)
-		return err
+		if _, ok := err.(StaleEntriesError); ok {
+			staleEntries = true
+		} else {
+			reportError(err, msg)
+			return err
+		}
 	}
 
-	_, err = replyTo(msg, formatTimetable(day, entries), makeSchedButtons(day))
+	_, err = replyTo(msg, formatTimetable(day, entries, staleEntries), makeSchedButtons(day))
 	if err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
@@ -99,12 +111,17 @@ func scheduleCmd(msg *tgbotapi.Message) error {
 func todayCmd(msg *tgbotapi.Message) error {
 	now := time.Now().In(timezone)
 	entries, err := cache.OnDay(now)
+	staleEntries := false
 	if err != nil {
-		reportError(err, msg)
-		return err
+		if _, ok := err.(StaleEntriesError); ok {
+			staleEntries = true
+		} else {
+			reportError(err, msg)
+			return err
+		}
 	}
 
-	_, err = replyTo(msg, formatTimetable(now, entries), makeSchedButtons(now))
+	_, err = replyTo(msg, formatTimetable(now, entries, staleEntries), makeSchedButtons(now))
 	if err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
@@ -115,12 +132,17 @@ func todayCmd(msg *tgbotapi.Message) error {
 func tomorrowCmd(msg *tgbotapi.Message) error {
 	tomorrow := time.Now().In(timezone).AddDate(0, 0, 1)
 	entries, err := cache.OnDay(tomorrow)
+	staleEntries := false
 	if err != nil {
-		reportError(err, msg)
-		return err
+		if _, ok := err.(StaleEntriesError); ok {
+			staleEntries = true
+		} else {
+			reportError(err, msg)
+			return err
+		}
 	}
 
-	_, err = replyTo(msg, formatTimetable(tomorrow, entries), makeSchedButtons(tomorrow))
+	_, err = replyTo(msg, formatTimetable(tomorrow, entries, staleEntries), makeSchedButtons(tomorrow))
 	if err != nil {
 		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
 	}
@@ -187,11 +209,16 @@ func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
 	}
 
 	entries, err := cache.OnDay(date)
+	staleEntries := false
 	if err != nil {
-		return errors.Wrap(err, "cache query")
+		if _, ok := err.(StaleEntriesError); ok {
+			staleEntries = true
+		} else {
+			return errors.Wrap(err, "cache query")
+		}
 	}
 
-	cfg := tgbotapi.NewEditMessageText(query.Message.Chat.ID, query.Message.MessageID, formatTimetable(date, entries))
+	cfg := tgbotapi.NewEditMessageText(query.Message.Chat.ID, query.Message.MessageID, formatTimetable(date, entries, staleEntries))
 	newReplyMarkup := makeSchedButtons(date)
 	cfg.ParseMode = "Markdown"
 	cfg.ReplyMarkup = &newReplyMarkup

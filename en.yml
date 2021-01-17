@@ -39,6 +39,7 @@ replies:
   missing_permissions: 'Admin access required.'
   invalid_date: 'Invalid date format'
   timetable_header: "*Timetable for {date}*\n\n"
+  timetable_header_stale: "*Timetable for {date}*\n\n⚠️Failed to update timetable, information may be outdated.\n\n"
   empty: _empty_
   no_more_lessons_today: 'No more lessions today.'
 entry_template: |-

@@ -12,13 +12,19 @@ import (
 
 const maxCacheAge = time.Hour
 
-type LessonType int
+type StaleEntriesError struct {
+	E error
+}
 
-const (
-	Lab      LessonType = 0
-	Practice            = 1
-	Lecture             = 2
-)
+func (e StaleEntriesError) Error() string {
+	return e.E.Error()
+}
+
+func (e StaleEntriesError) Unwrap() error {
+	return e.E
+}
+
+type LessonType int
 
 type Entry struct {
 	Time      time.Time
@@ -26,7 +32,7 @@ type Entry struct {
 	Classroom string
 	Lecturer  string
 	Name      string
-	Notes	  string
+	Notes     string
 }
 
 type cachedEntries struct {
@@ -94,6 +100,9 @@ func (c *Cache) OnDay(day time.Time) ([]Entry, error) {
 
 	if !prs || entries.retrievedOn.Add(maxCacheAge).Before(time.Now()) {
 		if err := c.downloadWeek(day); err != nil {
+			if prs {
+				return entries.entries, StaleEntriesError{E: err}
+			}
 			return nil, err
 		}
 		return c.cache[day].entries, nil
@@ -136,14 +145,17 @@ func (c *Cache) cleanUp() {
 	defer c.cacheLck.Unlock()
 
 	totalRemoved := 0
-	for k, ent := range c.cache {
-		if ent.retrievedOn.Add(maxCacheAge).Before(time.Now()) {
-			totalRemoved += 1
-			delete(c.cache, k)
-		}
-	}
+	/*
 
-	for len(c.cache) > 100 {
+		for k, ent := range c.cache {
+			if ent.retrievedOn.Add(maxCacheAge).Before(time.Now()) {
+				totalRemoved += 1
+				delete(c.cache, k)
+			}
+		}
+	*/
+
+	for len(c.cache) > 50 {
 		oldestStamp := time.Now()
 		oldestDay := time.Time{}
 		for k, ent := range c.cache {
