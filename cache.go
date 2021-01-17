@@ -130,7 +130,6 @@ func (c *Cache) downloadWeek(day time.Time) error {
 	c.cacheLck.Lock()
 	defer c.cacheLck.Unlock()
 	for fromDay.Before(toDay.Add(24 * time.Hour)) {
-		log.Printf("Key: %+v", StripTime(fromDay, time.UTC))
 		c.cache[fromDay] = cachedEntries{
 			entries:     FromRaw(fromDay, rawTable[StripTime(fromDay, time.UTC)]),
 			retrievedOn: time.Now(),
@@ -182,7 +181,6 @@ func (c *Cache) Evict(date time.Time) {
 
 func FromRaw(date time.Time, e []ttparser.RawEntry) []Entry {
 	res := make([]Entry, len(e))
-	log.Printf("Raw entries: %+v", e)
 	for i, ent := range e {
 		res[i] = Entry{
 			Time:      TimeSlotSet(date, config.TimeslotsBegin[ent.Sequence-1]),

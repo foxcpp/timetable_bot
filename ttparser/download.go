@@ -1,9 +1,8 @@
 package ttparser
 
 import (
-	"net/http"
 	"fmt"
-	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 var tableUrl = `https://ies.unitech-mo.ru/schedule_list_groups`
 
 type Cfg struct {
-	Group   int `yaml:"group"`
+	Group int `yaml:"group"`
 }
 
 type RawEntry struct {
@@ -23,12 +22,11 @@ type RawEntry struct {
 	Type      string
 	Classroom string
 	Lecturer  string
-	Notes 	  string
+	Notes     string
 }
 
 func Download(from, to time.Time, cfg Cfg) (map[time.Time][]RawEntry, error) {
 	path := fmt.Sprintf("%s?d=%s&g=%d", tableUrl, from.Format("02.01.2006")+"+-+"+to.Format("02.01.2006"), cfg.Group)
-	log.Println(path)
 	resp, err := http.Get(path)
 	if err != nil {
 		return nil, errors.Wrap(err, "table get")
@@ -42,7 +40,7 @@ func Download(from, to time.Time, cfg Cfg) (map[time.Time][]RawEntry, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "new document")
 	}
-	
+
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
 
 	return readTable(from, doc)
@@ -50,14 +48,14 @@ func Download(from, to time.Time, cfg Cfg) (map[time.Time][]RawEntry, error) {
 
 func readTable(firstDay time.Time, doc *goquery.Document) (map[time.Time][]RawEntry, error) {
 	result := make(map[time.Time][]RawEntry)
-	
+
 	doc.Find(".adopt_area_scrollable > table > tbody").Each(func(indx int, tbody *goquery.Selection) {
-		day := firstDay.Add(24*time.Hour*time.Duration(indx))
+		day := firstDay.Add(24 * time.Hour * time.Duration(indx))
 		dayEnts := make([]RawEntry, 0, 8)
 
 		tbody.Find("tr").Each(func(lectureIndx int, tr *goquery.Selection) {
 			ent := RawEntry{}
-			ent.Sequence = lectureIndx+1
+			ent.Sequence = lectureIndx + 1
 			skipLine := false
 			tr.Find("td").Each(func(colIndx int, td *goquery.Selection) {
 				switch colIndx {
@@ -83,9 +81,9 @@ func readTable(firstDay time.Time, doc *goquery.Document) (map[time.Time][]RawEn
 			}
 			dayEnts = append(dayEnts, ent)
 		})
-		
+
 		result[day] = dayEnts
 	})
-	
+
 	return result, nil
 }
