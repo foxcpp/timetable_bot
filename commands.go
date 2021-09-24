@@ -238,18 +238,9 @@ func handleCallbackQuery(_ context.Context, query events.MessageEventObject) {
 	b := params.NewMessagesEditBuilder()
 	b.PeerID(query.PeerID)
 	b.Message(formatTimetable(date, entries, staleEntries))
-	b.MessageID(query.ConversationMessageID)
+	b.Params["conversation_message_id"] = query.ConversationMessageID
 	b.Params["keyboard"] = makeSchedButtons(date)
 	if _, err := bot.MessagesEdit(b.Params); err != nil {
-		log.Println("handleCallbackQuery: ", err)
-		return
-	}
-
-	ans := params.NewMessagesSendMessageEventAnswerBuilder()
-	ans.UserID(query.UserID)
-	ans.PeerID(query.PeerID)
-	ans.EventID(query.EventID)
-	if _, err := bot.MessagesSendMessageEventAnswer(b.Params); err != nil {
 		log.Println("handleCallbackQuery: ", err)
 		return
 	}
