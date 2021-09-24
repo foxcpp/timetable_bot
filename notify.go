@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"log"
 	"time"
+
+	"github.com/SevereCloud/vksdk/v2/api/params"
 )
 
 func checkNotifications() {
@@ -48,9 +49,11 @@ func checkNotifications() {
 
 func broadcastNotify(notifyStr string) {
 	for _, chat := range config.NotifyChats {
-		msg := tgbotapi.NewMessage(chat, notifyStr)
-		msg.ParseMode = "Markdown"
-		if _, err := bot.Send(msg); err != nil {
+		b := params.NewMessagesSendBuilder()
+		b.PeerID(int(chat))
+		b.RandomID(0)
+		b.Message(notifyStr)
+		if _, err := bot.MessagesSend(b.Params); err != nil {
 			log.Printf("ERROR: Failed to send notification to chatid=%d: %v", chat, err)
 		}
 	}

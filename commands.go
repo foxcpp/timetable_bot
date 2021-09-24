@@ -1,21 +1,30 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/pkg/errors"
-	"github.com/slongfield/pyfmt"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/SevereCloud/vksdk/v2/api/params"
+	"github.com/SevereCloud/vksdk/v2/events"
+	"github.com/SevereCloud/vksdk/v2/object"
+	"github.com/pkg/errors"
+	"github.com/slongfield/pyfmt"
 )
 
-func replyTo(msg *tgbotapi.Message, text string, markup interface{}) (tgbotapi.Message, error) {
-	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
-	reply.ReplyToMessageID = msg.MessageID
-	reply.ParseMode = "Markdown"
-	reply.ReplyMarkup = markup
-	return bot.Send(reply)
+func replyTo(msg *events.MessageNewObject, text string, keyboard interface{}) (int, error) {
+	b := params.NewMessagesSendBuilder()
+	b.Message(text)
+	b.RandomID(0)
+	b.PeerID(msg.Message.PeerID)
+	if keyboard != nil {
+		b.Keyboard(keyboard)
+	}
+
+	return bot.MessagesSend(b.Params)
 }
 
 func adminCheck(uid int) bool {
@@ -27,18 +36,18 @@ func adminCheck(uid int) bool {
 	return false
 }
 
-func reportError(e error, replyToTgt *tgbotapi.Message) {
+func reportError(e error, replyToTgt *events.MessageNewObject) {
 	if _, err := replyTo(replyToTgt, fmt.Sprintf("*Что-то сломалось*\n```\n%s\n```", e), nil); err != nil {
 		log.Println("ERROR:", err)
 	}
 }
 
-func helpCmd(msg *tgbotapi.Message) error {
+func helpCmd(msg *events.MessageNewObject) error {
 	_, err := replyTo(msg, lang.Help, nil)
 	return err
 }
 
-func adminHelpCmd(msg *tgbotapi.Message) error {
+func adminHelpCmd(msg *events.MessageNewObject) error {
 	_, err := replyTo(msg, lang.AdminHelp, nil)
 	return err
 }
@@ -64,19 +73,20 @@ func formatTimetable(date time.Time, entries []Entry, staleEntries bool) string 
 	return hdr + strings.Join(entriesStr, "\n\n")
 }
 
-func makeSchedButtons(date time.Time) tgbotapi.InlineKeyboardMarkup {
-	return tgbotapi.NewInlineKeyboardMarkup([]tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("\u25C0",
-			date.AddDate(0, 0, -1).Format("02.01.06")),
-		tgbotapi.NewInlineKeyboardButtonData("\u25B6",
-			date.AddDate(0, 0, 1).Format("02.01.06"))})
+func makeSchedButtons(date time.Time) object.MessagesKeyboard {
+	kb := &object.MessagesKeyboard{}
+	kb.Inline = true
+	kb = kb.AddRow()
+	kb = kb.AddCallbackButton("\u25C0", date.AddDate(0, 0, -1).Format("02.01.06"), "secondary")
+	kb = kb.AddCallbackButton("\u25B6", date.AddDate(0, 0, 1).Format("02.01.06"), "secondary")
+	return *kb
 }
 
-func scheduleCmd(msg *tgbotapi.Message) error {
-	splitten := strings.Split(msg.Text, " ")
+func scheduleCmd(msg *events.MessageNewObject) error {
+	splitten := strings.Split(msg.Message.Text, " ")
 	if len(splitten) != 2 {
 		if _, err := replyTo(msg, lang.Usage.Schedule, nil); err != nil {
-			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 		}
 		return nil
 	}
@@ -84,7 +94,7 @@ func scheduleCmd(msg *tgbotapi.Message) error {
 	day, err := time.ParseInLocation("02.01.06", splitten[1], timezone)
 	if err != nil {
 		if _, err := replyTo(msg, lang.Replies.InvalidDate, nil); err != nil {
-			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 		}
 		return nil
 	}
@@ -95,7 +105,7 @@ func scheduleCmd(msg *tgbotapi.Message) error {
 		if _, ok := err.(StaleEntriesError); ok {
 			staleEntries = true
 			log.Printf("ERROR: sending stale entries for %v to chatid=%d,msgid=%d,uid=%d: %v\n",
-				day, msg.Chat.ID, msg.MessageID, msg.From.ID, err)
+				day, msg.Message.PeerID, msg.Message.ID, msg.Message.FromID, err)
 		} else {
 			reportError(err, msg)
 			return err
@@ -104,13 +114,13 @@ func scheduleCmd(msg *tgbotapi.Message) error {
 
 	_, err = replyTo(msg, formatTimetable(day, entries, staleEntries), makeSchedButtons(day))
 	if err != nil {
-		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 	}
 
 	return nil
 }
 
-func todayCmd(msg *tgbotapi.Message) error {
+func todayCmd(msg *events.MessageNewObject) error {
 	now := time.Now().In(timezone)
 	entries, err := cache.OnDay(now)
 	staleEntries := false
@@ -118,7 +128,7 @@ func todayCmd(msg *tgbotapi.Message) error {
 		if _, ok := err.(StaleEntriesError); ok {
 			staleEntries = true
 			log.Printf("ERROR: sending stale entries for %v to chatid=%d,msgid=%d,uid=%d: %v\n",
-				now, msg.Chat.ID, msg.MessageID, msg.From.ID, err)
+				now, msg.Message.PeerID, msg.Message.ID, msg.Message.FromID, err)
 		} else {
 			reportError(err, msg)
 			return err
@@ -127,13 +137,13 @@ func todayCmd(msg *tgbotapi.Message) error {
 
 	_, err = replyTo(msg, formatTimetable(now, entries, staleEntries), makeSchedButtons(now))
 	if err != nil {
-		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 	}
 
 	return nil
 }
 
-func tomorrowCmd(msg *tgbotapi.Message) error {
+func tomorrowCmd(msg *events.MessageNewObject) error {
 	tomorrow := time.Now().In(timezone).AddDate(0, 0, 1)
 	entries, err := cache.OnDay(tomorrow)
 	staleEntries := false
@@ -141,7 +151,7 @@ func tomorrowCmd(msg *tgbotapi.Message) error {
 		if _, ok := err.(StaleEntriesError); ok {
 			staleEntries = true
 			log.Printf("ERROR: sending stale entries for %v to chatid=%d,msgid=%d,uid=%d: %v\n",
-				tomorrow, msg.Chat.ID, msg.MessageID, msg.From.ID, err)
+				tomorrow, msg.Message.PeerID, msg.Message.ID, msg.Message.FromID, err)
 		} else {
 			reportError(err, msg)
 			return err
@@ -150,13 +160,13 @@ func tomorrowCmd(msg *tgbotapi.Message) error {
 
 	_, err = replyTo(msg, formatTimetable(tomorrow, entries, staleEntries), makeSchedButtons(tomorrow))
 	if err != nil {
-		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 	}
 
 	return nil
 }
 
-func nextCmd(msg *tgbotapi.Message) error {
+func nextCmd(msg *events.MessageNewObject) error {
 	now := time.Now().In(timezone)
 
 	var entry *Entry
@@ -175,18 +185,18 @@ func nextCmd(msg *tgbotapi.Message) error {
 	}
 	if entry == nil {
 		if _, err := replyTo(msg, lang.Replies.NoMoreLessonsToday, nil); err != nil {
-			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 		}
 		return nil
 	}
 
 	if _, err := replyTo(msg, formatEntry(*entry), nil); err != nil {
-		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 	}
 	return nil
 }
 
-func timetableCmd(msg *tgbotapi.Message) error {
+func timetableCmd(msg *events.MessageNewObject) error {
 	res := make([]string, len(config.TimeslotsBegin))
 	for i := 0; i < len(config.TimeslotsBegin); i++ {
 		res[i] = pyfmt.Must(lang.TimeslotFormat, map[string]interface{}{
@@ -197,21 +207,19 @@ func timetableCmd(msg *tgbotapi.Message) error {
 		})
 	}
 	if _, err := replyTo(msg, strings.Join(res, "\n"), nil); err != nil {
-		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d: %v", msg.Chat.ID, msg.MessageID, err)
+		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 	}
 	return nil
 }
 
-func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
-	if query.Data == "" {
-		return errors.New("no data in callback query")
-	}
-	if query.Message == nil {
-		return errors.New("message too old")
-	}
-	date, err := time.ParseInLocation("02.01.06", query.Data, timezone)
+func handleCallbackQuery(_ context.Context, query events.MessageEventObject) {
+	var dateRaw string
+	json.Unmarshal(query.Payload, &dateRaw)
+
+	date, err := time.ParseInLocation("02.01.06", dateRaw, timezone)
 	if err != nil {
-		return errors.Wrap(err, "parse data date")
+		log.Println("handleCallbackQuery: cache error: ", err)
+		return
 	}
 
 	entries, err := cache.OnDay(date)
@@ -220,32 +228,38 @@ func handleCallbackQuery(query *tgbotapi.CallbackQuery) error {
 		if _, ok := err.(StaleEntriesError); ok {
 			staleEntries = true
 			log.Printf("ERROR: sending stale entries for %v to chatid=%d,msgid=%d,uid=%d: %v\n",
-				date, query.Message.Chat.ID, query.Message.MessageID, query.From.ID, err)
+				date, query.PeerID, query.ConversationMessageID, query.UserID, err)
 		} else {
-			return errors.Wrap(err, "cache query")
+			log.Println("handleCallbackQuery: cache error: ", err)
+			return
 		}
 	}
 
-	cfg := tgbotapi.NewEditMessageText(query.Message.Chat.ID, query.Message.MessageID, formatTimetable(date, entries, staleEntries))
-	newReplyMarkup := makeSchedButtons(date)
-	cfg.ParseMode = "Markdown"
-	cfg.ReplyMarkup = &newReplyMarkup
-
-	if _, err := bot.Send(cfg); err != nil {
-		return errors.Wrap(err, "edit msg text")
+	b := params.NewMessagesEditBuilder()
+	b.PeerID(query.PeerID)
+	b.Message(formatTimetable(date, entries, staleEntries))
+	b.MessageID(query.ConversationMessageID)
+	b.Params["keyboard"] = makeSchedButtons(date)
+	if _, err := bot.MessagesEdit(b.Params); err != nil {
+		log.Println("handleCallbackQuery: ", err)
+		return
 	}
 
-	if _, err := bot.AnswerCallbackQuery(tgbotapi.NewCallback(query.ID, "")); err != nil {
-		return errors.Wrapf(err, "answerCallbackQuery %v", query.ID)
+	ans := params.NewMessagesSendMessageEventAnswerBuilder()
+	ans.UserID(query.UserID)
+	ans.PeerID(query.PeerID)
+	ans.EventID(query.EventID)
+	if _, err := bot.MessagesSendMessageEventAnswer(b.Params); err != nil {
+		log.Println("handleCallbackQuery: ", err)
+		return
 	}
-	return nil
 }
 
-func evictCmd(msg *tgbotapi.Message) error {
-	splitten := strings.Split(msg.Text, " ")
+func evictCmd(msg *events.MessageNewObject) error {
+	splitten := strings.Split(msg.Message.Text, " ")
 	if len(splitten) != 2 {
 		if _, err := replyTo(msg, lang.Usage.Evict, nil); err != nil {
-			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 		}
 		return nil
 	}
@@ -253,21 +267,14 @@ func evictCmd(msg *tgbotapi.Message) error {
 	day, err := time.ParseInLocation("02.01.06", splitten[1], timezone)
 	if err != nil {
 		if _, err := replyTo(msg, lang.Replies.InvalidDate, nil); err != nil {
-			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+			return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 		}
 		return nil
 	}
 
 	cache.Evict(day)
 	if _, err := replyTo(msg, "OK!", nil); err != nil {
-		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Chat.ID, msg.MessageID)
+		return errors.Wrapf(err, "replyTo chatid=%d, msgid=%d", msg.Message.PeerID, msg.Message.ID)
 	}
-	return nil
-}
-
-func easterEgg(msg *tgbotapi.Message) error {
-	rpl := tgbotapi.NewStickerShare(msg.Chat.ID, "CAADAQADcykAAnj8xgXDDcRyRS7wuAI")
-	bot.Send(rpl)
-
 	return nil
 }

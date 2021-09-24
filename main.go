@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io/ioutil"
 	"log"
 	"os"
@@ -11,15 +12,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SevereCloud/vksdk/v2/api"
+	"github.com/SevereCloud/vksdk/v2/events"
+	"github.com/SevereCloud/vksdk/v2/longpoll-bot"
 	"github.com/foxcpp/timetable_bot/ttparser"
-	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/jasonlvhit/gocron"
 	"github.com/pkg/errors"
 	"github.com/slongfield/pyfmt"
 	"gopkg.in/yaml.v2"
 )
 
-var bot *tgbotapi.BotAPI
+var bot *api.VK
 var cache *Cache
 var config Config
 var lang LangStrings
@@ -64,8 +67,7 @@ func ttindex(slot TimeSlot) int {
 type Config struct {
 	Lang              string `yaml:"lang"`
 	Token             string `yaml:"token"`
-	Driver            string `yaml:"driver"`
-	DSN               string `yaml:"dsn"`
+	GroupID           int    `yaml:"group_id"`
 	CmdProcGoroutines int    `yaml:"cmd_processing_goroutines"`
 
 	Admins []int `yaml:"admins"`
@@ -108,27 +110,13 @@ type LangStrings struct {
 	TimeslotFormat  string `yaml:"timeslot_format"`
 }
 
-func extractCommand(msg *tgbotapi.Message) string {
-	if msg.Entities == nil {
+func extractCommand(msg events.MessageNewObject) string {
+	if !strings.HasPrefix(msg.Message.Text, "!") {
 		return ""
 	}
 
-	for _, entity := range *msg.Entities {
-		if entity.Type != "bot_command" {
-			return ""
-		}
-		if entity.Offset != 0 {
-			return ""
-		}
-		fullCmd := msg.Text[:entity.Length]
-		if strings.Contains(fullCmd, "@") && !strings.HasSuffix(fullCmd, bot.Self.UserName) {
-			return ""
-		}
-
-		splitten := strings.Split(fullCmd, "@")
-		return splitten[0][1:]
-	}
-	return ""
+	splitten := strings.Split(msg.Message.Text, " ")
+	return splitten[0][1:]
 }
 
 func formatEntry(entry Entry) string {
@@ -145,57 +133,39 @@ func formatEntry(entry Entry) string {
 	})
 }
 
-func processUpdates(updates <-chan tgbotapi.Update) {
-	for {
-		update := <-updates
-		if update.CallbackQuery != nil {
-			err := handleCallbackQuery(update.CallbackQuery)
+func handleMessage(_ context.Context, msg_ events.MessageNewObject) {
+	log.Printf("Received %d '%s'", msg_.Message.PeerID, msg_.Message.Text)
+	command := extractCommand(msg_)
+	if command == "" {
+		return
 
-			if err != nil {
-				log.Printf("ERROR: while processing callback query id %v: %v\n",
-					update.CallbackQuery.ID, err)
-			}
-		} else {
-			if update.Message == nil || update.Message.Text == "" {
-				continue
-			}
-			msg := update.Message
+	}
 
-			if msg.Text == "<3" && msg.ReplyToMessage != nil && msg.ReplyToMessage.From.ID == bot.Self.ID {
-				easterEgg(msg)
-				continue
-			}
+	msg := &msg_
 
-			command := extractCommand(msg)
-			if command == "" {
-				continue
-			}
+	var err error
+	switch command {
+	case "today":
+		err = todayCmd(msg)
+	case "tomorrow":
+		err = tomorrowCmd(msg)
+	case "next":
+		err = nextCmd(msg)
+	case "timetable":
+		err = timetableCmd(msg)
+	case "help":
+		err = helpCmd(msg)
+	case "adminhelp":
+		err = adminHelpCmd(msg)
+	case "schedule":
+		err = scheduleCmd(msg)
+	case "evict":
+		err = evictCmd(msg)
+	}
 
-			var err error
-			switch command {
-			case "today":
-				err = todayCmd(msg)
-			case "tomorrow":
-				err = tomorrowCmd(msg)
-			case "next":
-				err = nextCmd(msg)
-			case "timetable":
-				err = timetableCmd(msg)
-			case "help":
-				err = helpCmd(msg)
-			case "adminhelp":
-				err = adminHelpCmd(msg)
-			case "schedule":
-				err = scheduleCmd(msg)
-			case "evict":
-				err = evictCmd(msg)
-			}
-
-			if err != nil {
-				log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
-					command, msg.Chat.ID, msg.MessageID, msg.From.ID, err)
-			}
-		}
+	if err != nil {
+		log.Printf("ERROR: while processing command %s in chatid=%d,msgid=%d,uid=%d: %v\n",
+			command, msg.Message.PeerID, msg.Message.ID, msg.Message.FromID, err)
 	}
 }
 
@@ -242,20 +212,25 @@ func main() {
 	log.Println("- Notify: in", config.NotifyInMins, "before begin; on end:", config.NotifyOnEnd, "; on break:", config.NotifyOnBreak)
 
 	cache = NewCache()
-	bot, err = tgbotapi.NewBotAPI(config.Token)
-	if err != nil {
-		log.Fatalln("Failed to init Bot API:", err)
-	}
+
+	bot = api.NewVK(config.Token)
 
 	gocron.Every(1).Minute().Do(checkNotifications)
 	gocron.Start()
 
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 25
-	updates, err := bot.GetUpdatesChan(u)
+	u, err := longpoll.NewLongPoll(bot, config.GroupID)
 	if err != nil {
 		log.Fatalln("Failed to init. updates channel:", err)
 	}
+
+	u.MessageNew(handleMessage)
+	u.MessageEvent(handleCallbackQuery)
+	go func() {
+		err := u.Run()
+		if err != nil {
+			log.Println("Longpool error:", err)
+		}
+	}()
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, syscall.SIGTERM, syscall.SIGHUP, os.Interrupt)
@@ -270,10 +245,7 @@ func main() {
 		}
 	}
 
-	for i := 0; i < config.CmdProcGoroutines; i++ {
-		go processUpdates(updates)
-	}
-
 	s := <-sig
 	log.Printf("%v; stopping...\n", s)
+	u.Shutdown()
 }
